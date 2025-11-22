@@ -24,8 +24,10 @@
     "hardhat"
   ],
   "dependencies": {
-    "encrypted-types": "^0.0.4",
-    "@fhevm/solidity": "^0.9.1"
+    "@fhevm/solidity": "^0.9.1",
+    "@uniswap/sdk-core": "^7.9.0",
+    "@uniswap/v4-sdk": "^1.23.0",
+    "encrypted-types": "^0.0.4"
   },
   "devDependencies": {
     "@fhevm/hardhat-plugin": "^0.3.0-1",
