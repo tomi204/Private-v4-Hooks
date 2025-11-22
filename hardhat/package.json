@@ -25,15 +25,18 @@
   ],
   "dependencies": {
     "@fhevm/solidity": "^0.9.1",
+    "@openzeppelin/contracts": "^5.4.0",
     "@uniswap/sdk-core": "^7.9.0",
     "@uniswap/v4-core": "^1.0.2",
     "@uniswap/v4-periphery": "^1.0.3",
     "@uniswap/v4-sdk": "^1.23.0",
     "encrypted-types": "^0.0.4",
+    "openzeppelin-confidential-contracts": "git+https://github.com/OpenZeppelin/openzeppelin-confidential-contracts.git#master",
     "solmate": "^6.8.0"
   },
   "devDependencies": {
     "@fhevm/hardhat-plugin": "^0.3.0-1",
+    "@fhevm/mock-utils": "^0.3.0-1",
     "@nomicfoundation/hardhat-chai-matchers": "^2.1.0",
     "@nomicfoundation/hardhat-ethers": "^3.1.0",
     "@nomicfoundation/hardhat-network-helpers": "^1.1.0",
@@ -53,7 +56,7 @@
     "eslint-config-prettier": "^9.1.0",
     "ethers": "^6.15.0",
     "hardhat": "^2.26.0",
-    "hardhat-deploy": "^0.11.45",
+    "hardhat-deploy": "^1.0.4",
     "hardhat-gas-reporter": "^2.3.0",
     "mocha": "^11.7.1",
     "prettier": "^3.6.2",
@@ -105,5 +108,9 @@
     "axios@<0.29.1": ">=0.29.1",
     "cookie@<0.7.0": ">=0.7.0",
     "minimatch": "^3.1.2"
+  },
+  "resolutions": {
+    "glob": "^7.2.3",
+    "zksync-web3": "npm:zksync-ethers@^5.0.0"
   }
 }
