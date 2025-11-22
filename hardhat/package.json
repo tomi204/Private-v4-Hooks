@@ -32,6 +32,7 @@
     "@uniswap/v4-sdk": "^1.23.0",
     "encrypted-types": "^0.0.4",
     "openzeppelin-confidential-contracts": "git+https://github.com/OpenZeppelin/openzeppelin-confidential-contracts.git#master",
+    "@pythnetwork/pyth-sdk-solidity": "^4.2.0",
     "solmate": "^6.8.0"
   },
   "devDependencies": {

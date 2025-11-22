@@ -9,6 +9,14 @@ type Signers = {
   bob: HardhatEthersSigner;
 };
 
+type PoolKey = {
+  currency0: string;
+  currency1: string;
+  fee: number;
+  tickSpacing: number;
+  hooks: string;
+};
+
 describe("CounterHook", function () {
   let signers: Signers;
   let counterHook: TestableCounterHook;
@@ -37,20 +45,20 @@ describe("CounterHook", function () {
     it("should return correct hook permissions", async function () {
       const permissions = await counterHook.getHookPermissions();
 
-      expect(permissions.beforeInitialize).to.be.false;
-      expect(permissions.afterInitialize).to.be.false;
-      expect(permissions.beforeAddLiquidity).to.be.true;
-      expect(permissions.afterAddLiquidity).to.be.false;
-      expect(permissions.beforeRemoveLiquidity).to.be.true;
-      expect(permissions.afterRemoveLiquidity).to.be.false;
-      expect(permissions.beforeSwap).to.be.true;
-      expect(permissions.afterSwap).to.be.true;
-      expect(permissions.beforeDonate).to.be.false;
-      expect(permissions.afterDonate).to.be.false;
-      expect(permissions.beforeSwapReturnDelta).to.be.false;
-      expect(permissions.afterSwapReturnDelta).to.be.false;
-      expect(permissions.afterAddLiquidityReturnDelta).to.be.false;
-      expect(permissions.afterRemoveLiquidityReturnDelta).to.be.false;
+      expect(permissions.beforeInitialize).to.equal(false);
+      expect(permissions.afterInitialize).to.equal(false);
+      expect(permissions.beforeAddLiquidity).to.equal(true);
+      expect(permissions.afterAddLiquidity).to.equal(false);
+      expect(permissions.beforeRemoveLiquidity).to.equal(true);
+      expect(permissions.afterRemoveLiquidity).to.equal(false);
+      expect(permissions.beforeSwap).to.equal(true);
+      expect(permissions.afterSwap).to.equal(true);
+      expect(permissions.beforeDonate).to.equal(false);
+      expect(permissions.afterDonate).to.equal(false);
+      expect(permissions.beforeSwapReturnDelta).to.equal(false);
+      expect(permissions.afterSwapReturnDelta).to.equal(false);
+      expect(permissions.afterAddLiquidityReturnDelta).to.equal(false);
+      expect(permissions.afterRemoveLiquidityReturnDelta).to.equal(false);
     });
   });
 
@@ -103,7 +111,7 @@ describe("CounterHook", function () {
       // We can't directly access it as it's in the base contract,
       // but we can verify the hook was constructed correctly
       const hookAddress = await counterHook.getAddress();
-      expect(hookAddress).to.be.properAddress;
+      expect(ethers.isAddress(hookAddress)).to.equal(true);
     });
 
     it("should be ready for pool operations", async function () {
@@ -111,10 +119,10 @@ describe("CounterHook", function () {
       const permissions = await counterHook.getHookPermissions();
 
       // These hooks should trigger on operations
-      expect(permissions.beforeSwap).to.be.true;
-      expect(permissions.afterSwap).to.be.true;
-      expect(permissions.beforeAddLiquidity).to.be.true;
-      expect(permissions.beforeRemoveLiquidity).to.be.true;
+      expect(permissions.beforeSwap).to.equal(true);
+      expect(permissions.afterSwap).to.equal(true);
+      expect(permissions.beforeAddLiquidity).to.equal(true);
+      expect(permissions.beforeRemoveLiquidity).to.equal(true);
     });
   });
 
@@ -128,7 +136,7 @@ describe("CounterHook", function () {
       // confirms we're using the testable version.
 
       const hookAddress = await counterHook.getAddress();
-      expect(hookAddress).to.be.properAddress;
+      expect(ethers.isAddress(hookAddress)).to.equal(true);
 
       // The address does NOT need to match the hook flags
       // This is only possible because TestableCounterHook skips validation
@@ -139,10 +147,10 @@ describe("CounterHook", function () {
       const permissions = await counterHook.getHookPermissions();
 
       // All permissions should work the same as CounterHook
-      expect(permissions.beforeSwap).to.be.true;
-      expect(permissions.afterSwap).to.be.true;
-      expect(permissions.beforeAddLiquidity).to.be.true;
-      expect(permissions.beforeRemoveLiquidity).to.be.true;
+      expect(permissions.beforeSwap).to.equal(true);
+      expect(permissions.afterSwap).to.equal(true);
+      expect(permissions.beforeAddLiquidity).to.equal(true);
+      expect(permissions.beforeRemoveLiquidity).to.equal(true);
     });
   });
 
@@ -181,7 +189,7 @@ describe("CounterHook", function () {
 
   describe("Counter Increment Tests", function () {
     let hookAddress: string;
-    let poolKey: any;
+    let poolKey: PoolKey;
     let poolId: string;
 
     beforeEach(async function () {
@@ -200,7 +208,7 @@ describe("CounterHook", function () {
       // Calculate poolId (simplified - in production this uses PoolIdLibrary)
       const poolKeyEncoded = ethers.AbiCoder.defaultAbiCoder().encode(
         ["address", "address", "uint24", "int24", "address"],
-        [poolKey.currency0, poolKey.currency1, poolKey.fee, poolKey.tickSpacing, poolKey.hooks]
+        [poolKey.currency0, poolKey.currency1, poolKey.fee, poolKey.tickSpacing, poolKey.hooks],
       );
       poolId = ethers.keccak256(poolKeyEncoded);
     });
@@ -311,7 +319,7 @@ describe("CounterHook", function () {
       // Generate poolId again
       const poolKeyEncoded = ethers.AbiCoder.defaultAbiCoder().encode(
         ["address", "address", "uint24", "int24", "address"],
-        [poolKey.currency0, poolKey.currency1, poolKey.fee, poolKey.tickSpacing, poolKey.hooks]
+        [poolKey.currency0, poolKey.currency1, poolKey.fee, poolKey.tickSpacing, poolKey.hooks],
       );
       const poolId2 = ethers.keccak256(poolKeyEncoded);
 
@@ -330,7 +338,7 @@ describe("CounterHook", function () {
 
       const poolKeyEncoded2 = ethers.AbiCoder.defaultAbiCoder().encode(
         ["address", "address", "uint24", "int24", "address"],
-        [poolKey2.currency0, poolKey2.currency1, poolKey2.fee, poolKey2.tickSpacing, poolKey2.hooks]
+        [poolKey2.currency0, poolKey2.currency1, poolKey2.fee, poolKey2.tickSpacing, poolKey2.hooks],
       );
       const poolId2 = ethers.keccak256(poolKeyEncoded2);
 

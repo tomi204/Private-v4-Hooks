@@ -81,6 +81,7 @@ const config: HardhatUserConfig = {
             runs: 800,
           },
           evmVersion: "cancun",
+          viaIR: true, // Enable IR compilation to avoid stack too deep errors
         },
       },
       {
@@ -94,6 +95,7 @@ const config: HardhatUserConfig = {
             runs: 800,
           },
           evmVersion: "cancun",
+          viaIR: true, // Enable IR compilation to avoid stack too deep errors
         },
       },
     ],
