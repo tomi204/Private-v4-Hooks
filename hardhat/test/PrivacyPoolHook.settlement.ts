@@ -2,7 +2,7 @@ import { expect } from "chai";
 import { ethers, fhevm } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import type { TestablePrivacyPoolHook, PoolEncryptedToken, PoolManager, MockERC20 } from "../types";
-import { mineBlock, type PoolKey, decryptBalance } from "./helpers/privacypool.helpers";
+import { mineBlock, type PoolKey } from "./helpers/privacypool.helpers";
 
 describe("PrivacyPoolHook: Complete Settlement Flow", function () {
   let hook: TestablePrivacyPoolHook;
@@ -33,7 +33,7 @@ describe("PrivacyPoolHook: Complete Settlement Flow", function () {
     [owner, alice, bob, carol, relayer] = await ethers.getSigners();
 
     // Deploy REAL Uniswap V4 PoolManager
-    const PoolManagerFactory = await ethers.getContractFactory("PoolManager");
+    const PoolManagerFactory = await ethers.getContractFactory("contracts/mocks/PoolManager.sol:PoolManager");
     poolManager = await PoolManagerFactory.deploy(owner.address);
     await poolManager.waitForDeployment();
 
@@ -54,9 +54,18 @@ describe("PrivacyPoolHook: Complete Settlement Flow", function () {
     await token1.mint(bob.address, INITIAL_BALANCE);
     await token1.mint(carol.address, INITIAL_BALANCE);
 
+    // Deploy MockPyth
+    const MockPythFactory = await ethers.getContractFactory("contracts/mocks/MockPyth.sol:MockPyth");
+    const mockPyth = await MockPythFactory.deploy(60, 1);
+    await mockPyth.waitForDeployment();
+
     // Deploy TestablePrivacyPoolHook
     const TestablePrivacyPoolHookFactory = await ethers.getContractFactory("TestablePrivacyPoolHook");
-    hook = await TestablePrivacyPoolHookFactory.deploy(await poolManager.getAddress(), relayer.address);
+    hook = await TestablePrivacyPoolHookFactory.deploy(
+      await poolManager.getAddress(),
+      relayer.address,
+      await mockPyth.getAddress()
+    );
     await hook.waitForDeployment();
 
     // Create poolKey
@@ -156,10 +165,7 @@ describe("PrivacyPoolHook: Complete Settlement Flow", function () {
         .add64(Number(swapAmount))
         .encrypt();
 
-      const aliceEncAction = await fhevm
-        .createEncryptedInput(hookAddress, alice.address)
-        .add8(0)
-        .encrypt();
+      const aliceEncAction = await fhevm.createEncryptedInput(hookAddress, alice.address).add8(0).encrypt();
 
       const aliceIntentTx = await hook
         .connect(alice)
@@ -187,10 +193,7 @@ describe("PrivacyPoolHook: Complete Settlement Flow", function () {
         .add64(Number(swapAmount))
         .encrypt();
 
-      const bobEncAction = await fhevm
-        .createEncryptedInput(hookAddress, bob.address)
-        .add8(1)
-        .encrypt();
+      const bobEncAction = await fhevm.createEncryptedInput(hookAddress, bob.address).add8(1).encrypt();
 
       const bobIntentTx = await hook
         .connect(bob)
@@ -222,7 +225,7 @@ describe("PrivacyPoolHook: Complete Settlement Flow", function () {
       await mineBlock();
 
       const batch = await hook.batches(batchId);
-      expect(batch.finalized).to.be.true;
+      expect(batch.finalized).to.equal(true);
 
       console.log("Batch finalized");
       console.log("  Batch ID:", batchId);
@@ -255,6 +258,7 @@ describe("PrivacyPoolHook: Complete Settlement Flow", function () {
           poolKey.currency1,
           await encryptedToken1.getAddress(),
           [],
+          "0x"
         );
 
       await settleTx.wait();
@@ -268,7 +272,7 @@ describe("PrivacyPoolHook: Complete Settlement Flow", function () {
       console.log("\n[STEP 6] VERIFY SETTLEMENT");
 
       const settledBatch = await hook.batches(batchId);
-      expect(settledBatch.settled).to.be.true;
+      expect(settledBatch.settled).to.equal(true);
 
       console.log("Batch settled successfully");
 
@@ -407,8 +411,8 @@ describe("PrivacyPoolHook: Complete Settlement Flow", function () {
 
       // Setup
       await token0.connect(alice).approve(hookAddress, DEPOSIT_AMOUNT);
-      let tx = await hook.connect(alice).deposit(poolKey, poolKey.currency0, DEPOSIT_AMOUNT);
-      let receipt = await tx.wait();
+      const tx = await hook.connect(alice).deposit(poolKey, poolKey.currency0, DEPOSIT_AMOUNT);
+      const receipt = await tx.wait();
       await mineBlock();
 
       const event = receipt?.logs.find((log) => {
@@ -465,12 +469,12 @@ describe("PrivacyPoolHook: Complete Settlement Flow", function () {
 
       batch = await hook.batches(batchId);
       expect(batch.finalized).to.be.true;
-      expect(batch.settled).to.be.false;
+      expect(batch.settled).to.equal(false);
 
       // Settle
       await hook
         .connect(relayer)
-        .settleBatch(batchId, [], 0, poolKey.currency0, poolKey.currency1, await encryptedToken0.getAddress(), []);
+        .settleBatch(batchId, [], 0, poolKey.currency0, poolKey.currency1, await encryptedToken0.getAddress(), [], "0x");
 
       await mineBlock();
 

@@ -59,6 +59,11 @@ import {Ownable2Step, Ownable} from "@openzeppelin/contracts/access/Ownable2Step
 import {FHE, externalEuint64, euint64, externalEuint8, euint8, ebool} from "@fhevm/solidity/lib/FHE.sol";
 import {ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
 
+// Oracle & Strategy
+import {IPyth} from "@pythnetwork/pyth-sdk-solidity/IPyth.sol";
+import {PythStructs} from "@pythnetwork/pyth-sdk-solidity/PythStructs.sol";
+import {IDeltaZeroStrategy} from "./interfaces/IDeltaZeroStrategy.sol";
+
 contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient, ZamaEthereumConfig, Ownable2Step {
     using SafeERC20 for IERC20;
     using PoolIdLibrary for PoolKey;
@@ -114,6 +119,8 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
     );
 
     event RelayerUpdated(address indexed oldRelayer, address indexed newRelayer);
+    event DeltaZeroStrategyUpdated(address indexed oldStrategy, address indexed newStrategy);
+    event PriceUpdated(bytes32 indexed priceFeedId, int64 price, uint64 publishTime);
 
     // =============================================================
     //                           ERRORS
@@ -161,6 +168,15 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
     /// @notice Temporary storage for AMM output during settlement
     uint128 private lastSwapOutput;
 
+    /// @notice Pyth oracle for price feeds
+    IPyth public immutable pyth;
+
+    /// @notice Delta zero rebalancing strategy (optional)
+    IDeltaZeroStrategy public deltaZeroStrategy;
+
+    /// @notice ETH/USD price feed ID
+    bytes32 public constant ETH_USD_PRICE_FEED = 0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace;
+
     // =============================================================
     //                         MODIFIERS
     // =============================================================
@@ -174,9 +190,12 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
     //                        CONSTRUCTOR
     // =============================================================
 
-    constructor(IPoolManager _poolManager, address _relayer) BaseHook(_poolManager) Ownable(msg.sender) {
+    constructor(IPoolManager _poolManager, address _relayer, address _pyth) BaseHook(_poolManager) Ownable(msg.sender) {
         if (_relayer == address(0)) revert InvalidRelayer();
+        if (_pyth == address(0)) revert ZeroAddress();
+
         relayer = _relayer;
+        pyth = IPyth(_pyth);
     }
 
     // =============================================================
@@ -438,6 +457,7 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
      * @param tokenOut Output token for AMM swap
      * @param outputToken Encrypted token for output distribution
      * @param userShares User shares for AMM output distribution
+     * @param pythPriceUpdate Pyth price update data
      */
     function settleBatch(
         bytes32 batchId,
@@ -446,8 +466,9 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
         Currency tokenIn,
         Currency tokenOut,
         address outputToken,
-        IntentTypes.UserShare[] calldata userShares
-    ) external onlyRelayer nonReentrant {
+        IntentTypes.UserShare[] calldata userShares,
+        bytes calldata pythPriceUpdate
+    ) external payable onlyRelayer nonReentrant {
         IntentTypes.Batch storage batch = batches[batchId];
         if (!batch.finalized) revert BatchNotFinalized();
         if (batch.settled) revert BatchAlreadySettled();
@@ -465,7 +486,16 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
         // Execute net swap on AMM if needed
         uint128 amountOut = 0;
         if (netAmountIn > 0) {
+            // Update Pyth price oracle
+            _updatePythPrice(pythPriceUpdate);
+
+            // Execute net swap
             amountOut = _executeNetSwap(batchId, key, poolId, netAmountIn, tokenIn, tokenOut);
+
+            // Execute delta zero rebalancing strategy if configured
+            if (address(deltaZeroStrategy) != address(0)) {
+                deltaZeroStrategy.executeRebalance(key, poolId, netAmountIn);
+            }
 
             // Distribute AMM output to users based on shares
             _distributeAMMOutput(outputToken, amountOut, userShares);
@@ -718,41 +748,38 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
     }
 
     // =============================================================
-    //                       VIEW FUNCTIONS
+    //                    PYTH ORACLE INTEGRATION
     // =============================================================
 
     /**
-     * @notice Get batch info
+     * @notice Update Pyth price oracle
      */
-    function getBatch(bytes32 batchId) external view returns (IntentTypes.Batch memory) {
-        return batches[batchId];
+    function _updatePythPrice(bytes calldata pythPriceUpdate) internal {
+        if (pythPriceUpdate.length == 0) return;
+
+        bytes[] memory priceUpdateData = new bytes[](1);
+        priceUpdateData[0] = pythPriceUpdate;
+
+        uint256 fee = pyth.getUpdateFee(priceUpdateData);
+        pyth.updatePriceFeeds{value: fee}(priceUpdateData);
+
+        PythStructs.Price memory price = pyth.getPriceNoOlderThan(ETH_USD_PRICE_FEED, 600);
+        emit PriceUpdated(ETH_USD_PRICE_FEED, price.price, uint64(price.publishTime));
     }
 
     /**
-     * @notice Get intent info
+     * @notice Set delta zero rebalancing strategy
+     * @param strategy Address of delta zero strategy contract
      */
-    function getIntent(bytes32 intentId) external view returns (IntentTypes.Intent memory) {
-        return intents[intentId];
+    function setDeltaZeroStrategy(address strategy) external onlyOwner {
+        address oldStrategy = address(deltaZeroStrategy);
+        deltaZeroStrategy = IDeltaZeroStrategy(strategy);
+        emit DeltaZeroStrategyUpdated(oldStrategy, strategy);
     }
 
     /**
-     * @notice Get pool reserves
+     * @notice Allow contract to receive ETH for Pyth fees
      */
-    function getPoolReserves(PoolId poolId) external view returns (IntentTypes.PoolReserves memory) {
-        return poolReserves[poolId];
-    }
+    receive() external payable {}
 
-    /**
-     * @notice Get encrypted token for pool/currency
-     */
-    function getEncryptedToken(PoolId poolId, Currency currency) external view returns (address) {
-        return address(poolEncryptedTokens[poolId][currency]);
-    }
-
-    /**
-     * @notice Get current batch ID for pool
-     */
-    function getCurrentBatchId(PoolId poolId) external view returns (bytes32) {
-        return currentBatchId[poolId];
-    }
 }

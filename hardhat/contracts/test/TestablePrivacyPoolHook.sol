@@ -12,7 +12,11 @@ import {BaseHook} from "@uniswap/v4-periphery/src/utils/BaseHook.sol";
  *      to skip the address validation that requires specific hook addresses in production.
  */
 contract TestablePrivacyPoolHook is PrivacyPoolHook {
-    constructor(IPoolManager _poolManager, address _relayer) PrivacyPoolHook(_poolManager, _relayer) {}
+    constructor(
+        IPoolManager _poolManager,
+        address _relayer,
+        address _pyth
+    ) PrivacyPoolHook(_poolManager, _relayer, _pyth) {}
 
     /**
      * @notice Override to skip validation in test environment

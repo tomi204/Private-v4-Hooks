@@ -29,7 +29,7 @@ describe("PrivacyPoolHook", function () {
     [owner, alice, bob, relayer] = await ethers.getSigners();
 
     // Deploy REAL Uniswap V4 PoolManager
-    const PoolManagerFactory = await ethers.getContractFactory("PoolManager");
+    const PoolManagerFactory = await ethers.getContractFactory("contracts/mocks/PoolManager.sol:PoolManager");
     poolManager = await PoolManagerFactory.deploy(owner.address);
     await poolManager.waitForDeployment();
     const poolManagerAddress = await poolManager.getAddress();
@@ -49,9 +49,18 @@ describe("PrivacyPoolHook", function () {
     await mockToken0.mint(bob.address, ethers.parseUnits("100000", 6));
     await mockToken1.mint(bob.address, ethers.parseUnits("100000", 6));
 
+    // Deploy MockPyth
+    const MockPythFactory = await ethers.getContractFactory("contracts/mocks/MockPyth.sol:MockPyth");
+    const mockPyth = await MockPythFactory.deploy(60, 1);
+    await mockPyth.waitForDeployment();
+
     // Deploy TestablePrivacyPoolHook (skips address validation for testing)
     const TestablePrivacyPoolHookFactory = await ethers.getContractFactory("TestablePrivacyPoolHook");
-    hook = await TestablePrivacyPoolHookFactory.deploy(poolManagerAddress, relayer.address);
+    hook = await TestablePrivacyPoolHookFactory.deploy(
+      poolManagerAddress,
+      relayer.address,
+      await mockPyth.getAddress()
+    );
     await hook.waitForDeployment();
 
     // Create poolKey

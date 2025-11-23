@@ -30,7 +30,7 @@ describe("CounterHook", function () {
 
   beforeEach(async function () {
     // Deploy the REAL Uniswap v4 PoolManager
-    const PoolManagerFactory = await ethers.getContractFactory("PoolManager");
+    const PoolManagerFactory = await ethers.getContractFactory("contracts/mocks/PoolManager.sol:PoolManager");
     poolManager = await PoolManagerFactory.deploy(signers.deployer.address);
     await poolManager.waitForDeployment();
     poolManagerAddress = await poolManager.getAddress();
