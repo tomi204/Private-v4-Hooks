@@ -142,26 +142,31 @@ All functionality has been tested end-to-end on Sepolia testnet:
 ### Intent-Based Private Trading Flow
 
 6. ✅ **Deposit Encrypted Tokens**
-   - TX: [0x87d108d2...](https://sepolia.etherscan.io/tx/0x87d108d2c4af39efb79f448c05b1314bb1164142269ef486fe924a207ff4718f)
+   - TX: [0xe5d4a918...](https://sepolia.etherscan.io/tx/0xe5d4a9188064cee1f9f54fc530f3874348b9c82215a710b2c9351ae2b513e59a)
    - Deposited 2 WETH, received encrypted ERC7984 tokens
    - Balance: euint64 (fully encrypted)
 
 7. ✅ **Submit Encrypted Intent**
-   - TX: [0xc11bc3ac...](https://sepolia.etherscan.io/tx/0xc11bc3ac43740339c5d542bca5d6e079aab90497da3db44106d2818da89df2b8)
-   - Encrypted amount: euint64
-   - Encrypted action: euint8
-   - Batch ID: `0x116b83b3...`
+   - TX: [0x266538aa...](https://sepolia.etherscan.io/tx/0x266538aacbc8dedf67a9056981595277bd4edd9e5a957da97f5b449254b650ba)
+   - Encrypted amount: euint64 (1 WETH hidden)
+   - Encrypted action: euint8 (action 0 hidden)
+   - Batch ID: `0xac73cc7f897b13b16068ac3c62a0214890335523f3a6b398a068f901f8c33d8a`
 
 8. ✅ **Finalize Batch**
-   - TX: [0xa1bbb740...](https://sepolia.etherscan.io/tx/0xa1bbb740e8a59011998759d646f7bff778e77b90c3cd7083805700358e9e32f1)
+   - TX: [0xd34b6c7b...](https://sepolia.etherscan.io/tx/0xd34b6c7b3d8bd69c944bb8e1ac7605a444b1d468b24afd83060834bc8dc5702f)
    - Batch locked for settlement
 
 9. ✅ **Settle with Pyth Price Update**
-   - TX: [0xbf8fbfa0...](https://sepolia.etherscan.io/tx/0xbf8fbfa0c32dc49246054f508df8cbd138ad97596699188db67d98b63e38ee88)
+   - TX: [0x7c209b67...](https://sepolia.etherscan.io/tx/0x7c209b67cef2b5c2dff98895fe663fc83646e51b1fe5eb5e91992fb97a199c26)
    - Fetched ETH/USD from Pyth Hermes API
    - Updated Pyth oracle on-chain
    - Consumed price for settlement
-   - Gas: 76,500
+   - Gas: 76,440
+
+10. ✅ **Withdraw Tokens**
+   - TX: [0xe081b9c1...](https://sepolia.etherscan.io/tx/0xe081b9c19037dbc7b39717ed4cc0212ff1a976264bd4f5d85e4459b1f9c5f878)
+   - Withdrew 0.5 WETH
+   - Burned encrypted tokens, received ERC20
 
 ## Detailed Integration Guides
 
