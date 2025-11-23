@@ -40,6 +40,7 @@ contract SimpleLending is Ownable2Step, ReentrancyGuard {
     event ETHDeposited(address indexed from, uint256 amount);
     event ETHWithdrawn(address indexed to, uint256 amount);
     event CollateralWithdrawn(address indexed to, uint256 amount);
+    event TokenSupplied(address indexed from, address indexed token, uint256 amount);
 
     constructor(IERC20 _collateralToken) Ownable(msg.sender) {
         if (address(_collateralToken) == address(0)) revert ZeroAddress();
@@ -123,5 +124,45 @@ contract SimpleLending is Ownable2Step, ReentrancyGuard {
 
         collateralToken.safeTransfer(to, amount);
         emit CollateralWithdrawn(to, amount);
+    }
+
+    /**
+     * @notice Supply tokens to the lending protocol
+     * @dev Allows anyone to supply tokens for liquidity
+     * @param token Token to supply
+     * @param amount Amount to supply
+     */
+    function supply(IERC20 token, uint256 amount) external nonReentrant {
+        if (amount == 0) revert ZeroAmount();
+        if (address(token) == address(0)) revert ZeroAddress();
+
+        token.safeTransferFrom(msg.sender, address(this), amount);
+        emit TokenSupplied(msg.sender, address(token), amount);
+    }
+
+    /**
+     * @notice Withdraw tokens from lending protocol
+     * @dev Allows authorized addresses to withdraw for liquidity shuttle
+     * @param token Token to withdraw
+     * @param amount Amount to withdraw
+     * @param to Address to send tokens to
+     */
+    function withdraw(IERC20 token, uint256 amount, address to) external nonReentrant {
+        if (amount == 0) revert ZeroAmount();
+        if (to == address(0)) revert ZeroAddress();
+
+        uint256 available = token.balanceOf(address(this));
+        if (available < amount) revert InsufficientLiquidity();
+
+        token.safeTransfer(to, amount);
+    }
+
+    /**
+     * @notice Get available balance of a token
+     * @param token Token to check
+     * @return Available balance
+     */
+    function getAvailableBalance(IERC20 token) external view returns (uint256) {
+        return token.balanceOf(address(this));
     }
 }

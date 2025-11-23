@@ -78,7 +78,7 @@ const config: HardhatUserConfig = {
           // https://hardhat.org/hardhat-network/#solidity-optimizer-support
           optimizer: {
             enabled: true,
-            runs: 100,
+            runs: 1, // Minimize bytecode size for deployment
           },
           evmVersion: "cancun",
           viaIR: true, // Enable IR compilation to avoid stack too deep errors
@@ -92,7 +92,7 @@ const config: HardhatUserConfig = {
           },
           optimizer: {
             enabled: true,
-            runs: 100,
+            runs: 1, // Minimize bytecode size for deployment
           },
           evmVersion: "cancun",
           viaIR: true, // Enable IR compilation to avoid stack too deep errors

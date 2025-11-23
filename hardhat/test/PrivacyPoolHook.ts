@@ -49,13 +49,22 @@ describe("PrivacyPoolHook", function () {
     await mockToken0.mint(bob.address, ethers.parseUnits("100000", 6));
     await mockToken1.mint(bob.address, ethers.parseUnits("100000", 6));
 
+    // Deploy SettlementLib library
+    const SettlementLibFactory = await ethers.getContractFactory("SettlementLib");
+    const settlementLib = await SettlementLibFactory.deploy();
+    await settlementLib.waitForDeployment();
+
     // Deploy MockPyth
     const MockPythFactory = await ethers.getContractFactory("contracts/mocks/MockPyth.sol:MockPyth");
     const mockPyth = await MockPythFactory.deploy(60, 1);
     await mockPyth.waitForDeployment();
 
     // Deploy TestablePrivacyPoolHook (skips address validation for testing)
-    const TestablePrivacyPoolHookFactory = await ethers.getContractFactory("TestablePrivacyPoolHook");
+    const TestablePrivacyPoolHookFactory = await ethers.getContractFactory("TestablePrivacyPoolHook", {
+      libraries: {
+        SettlementLib: await settlementLib.getAddress(),
+      },
+    });
     hook = await TestablePrivacyPoolHookFactory.deploy(
       poolManagerAddress,
       relayer.address,
@@ -86,30 +95,17 @@ describe("PrivacyPoolHook", function () {
     it("should allow users to deposit tokens and create encrypted tokens", async function () {
       await mockToken0.connect(alice).approve(await hook.getAddress(), DEPOSIT_AMOUNT);
 
-      const tx = await hook.connect(alice).deposit(poolKey, poolKey.currency0, DEPOSIT_AMOUNT);
-      const receipt = await tx.wait();
+      await hook.connect(alice).deposit(poolKey, poolKey.currency0, DEPOSIT_AMOUNT);
       await mineBlock();
 
-      const event = receipt?.logs.find((log) => {
-        try {
-          const parsed = hook.interface.parseLog({
-            topics: log.topics as string[],
-            data: log.data,
-          });
-          return parsed?.name === "Deposited";
-        } catch {
-          return false;
-        }
-      });
-
-      expect(event).to.not.equal(undefined);
-
-      const parsed = hook.interface.parseLog({
-        topics: event!.topics as string[],
-        data: event!.data,
-      });
-
-      const encryptedTokenAddress = parsed?.args[4];
+      // Verify encrypted token was created by checking poolEncryptedTokens mapping
+      const poolId = ethers.keccak256(
+        ethers.AbiCoder.defaultAbiCoder().encode(
+          ["address", "address", "uint24", "int24", "address"],
+          [poolKey.currency0, poolKey.currency1, poolKey.fee, poolKey.tickSpacing, poolKey.hooks]
+        )
+      );
+      const encryptedTokenAddress = await hook.poolEncryptedTokens(poolId, poolKey.currency0);
       expect(encryptedTokenAddress).to.not.equal(ethers.ZeroAddress);
 
       console.log("Encrypted token created:", encryptedTokenAddress);
@@ -118,8 +114,8 @@ describe("PrivacyPoolHook", function () {
     it("should reject zero amount deposits", async function () {
       await expect(hook.connect(alice).deposit(poolKey, poolKey.currency0, 0)).to.be.revertedWithCustomError(
         hook,
-        "ZeroAmount",
-      );
+        "ERR",
+      ).withArgs(5); // E05: Zero amount
     });
   });
 
@@ -130,29 +126,17 @@ describe("PrivacyPoolHook", function () {
       const hookAddress = await hook.getAddress();
 
       await mockToken0.connect(alice).approve(hookAddress, ethers.parseUnits("10000", 6));
-      const tx = await hook.connect(alice).deposit(poolKey, poolKey.currency0, ethers.parseUnits("10000", 6));
-      const receipt = await tx.wait();
+      await hook.connect(alice).deposit(poolKey, poolKey.currency0, ethers.parseUnits("10000", 6));
       await mineBlock();
 
-      // Get encrypted token address
-      const event = receipt?.logs.find((log) => {
-        try {
-          const parsed = hook.interface.parseLog({
-            topics: log.topics as string[],
-            data: log.data,
-          });
-          return parsed?.name === "Deposited";
-        } catch {
-          return false;
-        }
-      });
-
-      const parsed = hook.interface.parseLog({
-        topics: event!.topics as string[],
-        data: event!.data,
-      });
-
-      const tokenAddress = parsed?.args[4];
+      // Get encrypted token address from poolEncryptedTokens mapping
+      const poolId = ethers.keccak256(
+        ethers.AbiCoder.defaultAbiCoder().encode(
+          ["address", "address", "uint24", "int24", "address"],
+          [poolKey.currency0, poolKey.currency1, poolKey.fee, poolKey.tickSpacing, poolKey.hooks]
+        )
+      );
+      const tokenAddress = await hook.poolEncryptedTokens(poolId, poolKey.currency0);
       encryptedToken0 = await ethers.getContractAt("PoolEncryptedToken", tokenAddress);
 
       // Set operator permission for hook to use confidentialTransferFrom
@@ -176,7 +160,7 @@ describe("PrivacyPoolHook", function () {
         .encrypt();
 
       // Submit intent
-      const tx = await hook
+      await hook
         .connect(alice)
         .submitIntent(
           poolKey,
@@ -188,22 +172,17 @@ describe("PrivacyPoolHook", function () {
           0,
         );
 
-      const receipt = await tx.wait();
       await mineBlock();
 
-      const event = receipt?.logs.find((log) => {
-        try {
-          const parsed = hook.interface.parseLog({
-            topics: log.topics as string[],
-            data: log.data,
-          });
-          return parsed?.name === "IntentSubmitted";
-        } catch {
-          return false;
-        }
-      });
-
-      expect(event).to.not.equal(undefined);
+      // Verify batch was created and intent was added
+      const poolId = ethers.keccak256(
+        ethers.AbiCoder.defaultAbiCoder().encode(
+          ["address", "address", "uint24", "int24", "address"],
+          [poolKey.currency0, poolKey.currency1, poolKey.fee, poolKey.tickSpacing, poolKey.hooks]
+        )
+      );
+      const batchId = await hook.currentBatchId(poolId);
+      expect(batchId).to.not.equal(ethers.ZeroHash);
 
       console.log("Intent submitted with encrypted amount and action");
     });
@@ -216,29 +195,18 @@ describe("PrivacyPoolHook", function () {
       const hookAddress = await hook.getAddress();
 
       await mockToken0.connect(alice).approve(hookAddress, ethers.parseUnits("10000", 6));
-      const tx = await hook.connect(alice).deposit(poolKey, poolKey.currency0, ethers.parseUnits("10000", 6));
-      const receipt = await tx.wait();
+      await hook.connect(alice).deposit(poolKey, poolKey.currency0, ethers.parseUnits("10000", 6));
       await mineBlock();
 
-      // Get encrypted token and set operator
-      const event = receipt?.logs.find((log) => {
-        try {
-          const parsed = hook.interface.parseLog({
-            topics: log.topics as string[],
-            data: log.data,
-          });
-          return parsed?.name === "Deposited";
-        } catch {
-          return false;
-        }
-      });
-
-      const parsed = hook.interface.parseLog({
-        topics: event!.topics as string[],
-        data: event!.data,
-      });
-
-      encryptedToken0 = await ethers.getContractAt("PoolEncryptedToken", parsed?.args[4]);
+      // Get encrypted token from poolEncryptedTokens mapping
+      const poolId = ethers.keccak256(
+        ethers.AbiCoder.defaultAbiCoder().encode(
+          ["address", "address", "uint24", "int24", "address"],
+          [poolKey.currency0, poolKey.currency1, poolKey.fee, poolKey.tickSpacing, poolKey.hooks]
+        )
+      );
+      const tokenAddress = await hook.poolEncryptedTokens(poolId, poolKey.currency0);
+      encryptedToken0 = await ethers.getContractAt("PoolEncryptedToken", tokenAddress);
 
       const maxExpiry = 2n ** 48n - 1n;
       await encryptedToken0.connect(alice).setOperator(hookAddress, maxExpiry); /// operator === approve in normal erc20 btw (without amount)
@@ -280,29 +248,18 @@ describe("PrivacyPoolHook", function () {
       const hookAddress = await hook.getAddress();
 
       await mockToken0.connect(alice).approve(hookAddress, ethers.parseUnits("10000", 6));
-      const tx = await hook.connect(alice).deposit(poolKey, poolKey.currency0, ethers.parseUnits("10000", 6));
-      const receipt = await tx.wait();
+      await hook.connect(alice).deposit(poolKey, poolKey.currency0, ethers.parseUnits("10000", 6));
       await mineBlock();
 
-      // Get encrypted token and set operator
-      const event = receipt?.logs.find((log) => {
-        try {
-          const parsed = hook.interface.parseLog({
-            topics: log.topics as string[],
-            data: log.data,
-          });
-          return parsed?.name === "Deposited";
-        } catch {
-          return false;
-        }
-      });
-
-      const parsed = hook.interface.parseLog({
-        topics: event!.topics as string[],
-        data: event!.data,
-      });
-
-      encryptedToken0 = await ethers.getContractAt("PoolEncryptedToken", parsed?.args[4]);
+      // Get encrypted token from poolEncryptedTokens mapping
+      const poolId = ethers.keccak256(
+        ethers.AbiCoder.defaultAbiCoder().encode(
+          ["address", "address", "uint24", "int24", "address"],
+          [poolKey.currency0, poolKey.currency1, poolKey.fee, poolKey.tickSpacing, poolKey.hooks]
+        )
+      );
+      const tokenAddress = await hook.poolEncryptedTokens(poolId, poolKey.currency0);
+      encryptedToken0 = await ethers.getContractAt("PoolEncryptedToken", tokenAddress);
 
       const maxExpiry = 2n ** 48n - 1n;
       await encryptedToken0.connect(alice).setOperator(hookAddress, maxExpiry); /// operator === approve in normal erc20 btw (without amount)

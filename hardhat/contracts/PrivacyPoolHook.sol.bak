@@ -40,18 +40,13 @@ import {CurrencySettler} from "@uniswap/v4-core/test/utils/CurrencySettler.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
-import {
-    BeforeSwapDelta,
-    BeforeSwapDeltaLibrary,
-    toBeforeSwapDelta
-} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
+import {BeforeSwapDelta, BeforeSwapDeltaLibrary, toBeforeSwapDelta} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {IUnlockCallback} from "@uniswap/v4-core/src/interfaces/callback/IUnlockCallback.sol";
 
 // Privacy Components
 import {PoolEncryptedToken} from "./tokens/PoolEncryptedToken.sol";
 import {IntentTypes} from "./libraries/IntentTypes.sol";
-import {SettlementLib} from "./libraries/SettlementLib.sol";
 
 // Token & Security
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -82,6 +77,28 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
 
     // Critical events only (removed verbose events to reduce contract size)
     event BatchSettled(bytes32 indexed batchId, uint256 internalTransfers, uint128 netAmountIn, uint128 amountOut);
+
+    // =============================================================
+    //                           ERRORS
+    // =============================================================
+
+    // Use error codes to reduce bytecode size
+    // E01: Invalid currency
+    // E02: Invalid pair
+    // E03: Token not exists
+    // E04: Zero address
+    // E05: Zero amount
+    // E06: Hook not enabled
+    // E07: Batch not finalized
+    // E08: Batch already settled
+    // E09: No active batch
+    // E10: Only relayer
+    // E11: Invalid relayer
+    // E12: Intent expired
+    // E13: Intent already processed
+    // E14: Swap amount exceeds limit
+    // E15: Insufficient liquidity
+    // E16: SimpleLending not set
 
     error ERR(uint8 code);
 
@@ -129,11 +146,12 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
     mapping(Currency => uint256) public maxSwapAmount;
 
     // =============================================================
-    //                     INTERNAL CHECKS
+    //                         MODIFIERS
     // =============================================================
 
-    function _checkRelayer() internal view {
-        if (msg.sender != relayer) revert ERR(10);
+    modifier onlyRelayer() {
+        if (msg.sender != relayer) revert ERR(10); // Only relayer
+        _;
     }
 
     // =============================================================
@@ -141,8 +159,8 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
     // =============================================================
 
     constructor(IPoolManager _poolManager, address _relayer, address _pyth) BaseHook(_poolManager) Ownable(msg.sender) {
-        if (_relayer == address(0)) revert ERR(11);
-        if (_pyth == address(0)) revert ERR(4);
+        if (_relayer == address(0)) revert ERR(11); // Invalid relayer
+        if (_pyth == address(0)) revert ERR(4); // Zero address
 
         relayer = _relayer;
         pyth = IPyth(_pyth);
@@ -184,17 +202,19 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
      * @param amount Amount to deposit
      */
     function deposit(PoolKey calldata key, Currency currency, uint256 amount) external nonReentrant {
-        if (amount == 0) revert ERR(5);
+        if (amount == 0) revert ERR(5); // Zero amount
 
         PoolId poolId = key.toId();
 
-        if (address(key.hooks) != address(this)) revert ERR(6);
+        // Validate hook is enabled
+        if (address(key.hooks) != address(this)) revert ERR(6); // Hook not enabled
 
+        // Validate currency belongs to pool
         if (
             Currency.unwrap(currency) != Currency.unwrap(key.currency0) &&
             Currency.unwrap(currency) != Currency.unwrap(key.currency1)
         ) {
-            revert ERR(1);
+            revert ERR(1); // Invalid currency
         }
 
         // Get or create encrypted token
@@ -218,6 +238,8 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
             reserves.currency1Reserve += amount;
         }
         reserves.totalDeposits += amount;
+
+        emit Deposited(poolId, currency, msg.sender, amount, address(encToken));
     }
 
     /**
@@ -242,11 +264,12 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
     ) external nonReentrant returns (bytes32 intentId) {
         PoolId poolId = key.toId();
 
+        // Validate inputCurrency belongs to pool
         if (
             Currency.unwrap(inputCurrency) != Currency.unwrap(key.currency0) &&
             Currency.unwrap(inputCurrency) != Currency.unwrap(key.currency1)
         ) {
-            revert ERR(1);
+            revert ERR(1); // Invalid currency
         }
 
         // Convert encrypted inputs
@@ -256,8 +279,9 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
         FHE.allowThis(amount);
         FHE.allowThis(action);
 
+        // Get encrypted token contract
         PoolEncryptedToken inputToken = poolEncryptedTokens[poolId][inputCurrency];
-        if (address(inputToken) == address(0)) revert ERR(3);
+        if (address(inputToken) == address(0)) revert ERR(3); // Token not exists
 
         // Grant token contract access and use ERC7984 transfer
         FHE.allow(amount, address(inputToken));
@@ -294,6 +318,8 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
         FHE.allow(amount, relayer);
         FHE.allow(action, relayer);
 
+        emit IntentSubmitted(poolId, inputCurrency, inputCurrency, msg.sender, intentId, batchId);
+
         return intentId;
     }
 
@@ -310,13 +336,14 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
         uint256 amount,
         address recipient
     ) external nonReentrant {
-        if (amount == 0) revert ERR(5);
-        if (recipient == address(0)) revert ERR(4);
+        if (amount == 0) revert ERR(5); // Zero amount
+        if (recipient == address(0)) revert ERR(4); // Zero address
 
         PoolId poolId = key.toId();
 
+        // Get encrypted token
         PoolEncryptedToken encToken = poolEncryptedTokens[poolId][currency];
-        if (address(encToken) == address(0)) revert ERR(3);
+        if (address(encToken) == address(0)) revert ERR(3); // Token not exists
 
         // Create encrypted amount for burning
         euint64 encryptedAmount = FHE.asEuint64(uint64(amount));
@@ -337,6 +364,8 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
 
         // Transfer underlying tokens to recipient
         IERC20(Currency.unwrap(currency)).safeTransfer(recipient, amount);
+
+        emit Withdrawn(poolId, currency, msg.sender, recipient, amount);
     }
 
     // =============================================================
@@ -349,6 +378,7 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
         SwapParams calldata params,
         bytes calldata hookData
     ) internal override returns (bytes4, BeforeSwapDelta, uint24) {
+        // Allow hook-initiated swaps to pass through without shuttle
         if (sender == address(this)) {
             return (BaseHook.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
         }
@@ -366,25 +396,32 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
             ? uint256(-params.amountSpecified)
             : uint256(params.amountSpecified);
 
+        // Anti-exploit: Check max swap amount
         uint256 limit = maxSwapAmount[tokenIn];
         if (limit > 0 && amountNeeded > limit) {
-            revert ERR(14);
+            revert ERR(14); // Swap amount exceeds limit
         }
 
+        // Check available liquidity in SimpleLending
         IERC20 token = IERC20(Currency.unwrap(tokenIn));
         uint256 available = simpleLending.getAvailableBalance(token);
         if (available < amountNeeded) {
-            revert ERR(15);
+            revert ERR(15); // Insufficient liquidity
         }
 
         // Withdraw from SimpleLending to hook
         simpleLending.withdraw(token, amountNeeded, address(this));
 
+        emit LiquidityShuttleWithdraw(tokenIn, amountNeeded);
+
         // Approve PoolManager to use the withdrawn tokens
         token.forceApprove(address(poolManager), amountNeeded);
 
         // Return positive delta to provide liquidity to the swap
-        return (BaseHook.beforeSwap.selector, toBeforeSwapDelta(int128(uint128(amountNeeded)), 0), 0);
+        int128 deltaAmount = int128(uint128(amountNeeded));
+        BeforeSwapDelta delta = toBeforeSwapDelta(deltaAmount, 0);
+
+        return (BaseHook.beforeSwap.selector, delta, 0);
     }
 
     function _afterSwap(
@@ -419,12 +456,14 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
         if (balanceTokenIn > 0) {
             erc20TokenIn.forceApprove(address(simpleLending), balanceTokenIn);
             simpleLending.supply(erc20TokenIn, balanceTokenIn);
+            emit LiquidityShuttleDeposit(tokenIn, balanceTokenIn);
         }
 
         // Redeposit received tokenOut
         if (balanceTokenOut > 0) {
             erc20TokenOut.forceApprove(address(simpleLending), balanceTokenOut);
             simpleLending.supply(erc20TokenOut, balanceTokenOut);
+            emit LiquidityShuttleDeposit(tokenOut, balanceTokenOut);
         }
 
         return (BaseHook.afterSwap.selector, 0);
@@ -441,11 +480,11 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
      */
     function finalizeBatch(PoolId poolId) external {
         bytes32 batchId = currentBatchId[poolId];
-        if (batchId == bytes32(0)) revert ERR(9);
+        if (batchId == bytes32(0)) revert ERR(9); // No active batch
 
         IntentTypes.Batch storage batch = batches[batchId];
-        if (batch.finalized) revert ERR(17);
-        if (batch.totalIntents == 0) revert ERR(18);
+        require(!batch.finalized, "Already finalized");
+        require(batch.totalIntents > 0, "Empty batch");
 
         // Mark as finalized
         batch.finalized = true;
@@ -453,6 +492,8 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
 
         // Clear current batch for this pool
         currentBatchId[poolId] = bytes32(0);
+
+        emit BatchFinalized(batchId, poolId, batch.totalIntents);
     }
 
     /**
@@ -476,11 +517,10 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
         address outputToken,
         IntentTypes.UserShare[] calldata userShares,
         bytes calldata pythPriceUpdate
-    ) external payable nonReentrant {
-        _checkRelayer();
+    ) external payable onlyRelayer nonReentrant {
         IntentTypes.Batch storage batch = batches[batchId];
-        if (!batch.finalized) revert ERR(7);
-        if (batch.settled) revert ERR(8);
+        if (!batch.finalized) revert ERR(7); // Batch not finalized
+        if (batch.settled) revert ERR(8); // Batch already settled
 
         // Get pool key from first intent
         IntentTypes.Intent storage firstIntent = intents[batch.intentIds[0]];
@@ -507,7 +547,7 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
             }
 
             // Distribute AMM output to users based on shares
-            SettlementLib.distributeAMMOutput(outputToken, amountOut, userShares);
+            _distributeAMMOutput(outputToken, amountOut, userShares);
         }
 
         // Mark batch as settled
@@ -529,12 +569,16 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
      * @notice Execute internal transfer between users
      * @dev Transfers encrypted tokens without touching AMM
      */
-    function _executeInternalTransfer(bytes32 /* batchId */, IntentTypes.InternalTransfer calldata transfer) internal {
+    function _executeInternalTransfer(bytes32 batchId, IntentTypes.InternalTransfer calldata transfer) internal {
         PoolEncryptedToken token = PoolEncryptedToken(transfer.encryptedToken);
 
+        // Grant token access to encrypted amount
         FHE.allow(transfer.encryptedAmount, address(token));
 
+        // Transfer encrypted tokens from → to using hook function
         token.hookTransfer(transfer.from, transfer.to, transfer.encryptedAmount);
+
+        emit InternalTransferExecuted(batchId, transfer.from, transfer.to, transfer.encryptedToken);
     }
 
     /**
@@ -543,7 +587,7 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
      * @return amountOut Amount received from AMM
      */
     function _executeNetSwap(
-        bytes32 /* batchId */,
+        bytes32 batchId,
         PoolKey memory key,
         PoolId poolId,
         uint128 amountIn,
@@ -554,16 +598,46 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
         lastSwapOutput = 0;
 
         // Prepare unlock data
-        bytes memory unlockData = abi.encode(key, poolId, amountIn, tokenIn, tokenOut);
+        bytes memory unlockData = abi.encode(batchId, key, poolId, amountIn, tokenIn, tokenOut);
 
         // Execute swap via unlock callback
         poolManager.unlock(unlockData);
 
         // Get output from callback
         amountOut = lastSwapOutput;
-        if (amountOut == 0) revert ERR(19);
+        require(amountOut > 0, "Swap failed");
+
+        emit NetSwapExecuted(batchId, poolId, tokenIn, tokenOut, amountIn, amountOut);
 
         return amountOut;
+    }
+
+    /**
+     * @notice Distribute AMM output to users based on shares
+     * @dev Mints encrypted tokens proportionally to users
+     */
+    function _distributeAMMOutput(
+        address outputTokenAddress,
+        uint128 totalOutput,
+        IntentTypes.UserShare[] calldata userShares
+    ) internal {
+        PoolEncryptedToken outputToken = PoolEncryptedToken(outputTokenAddress);
+
+        for (uint256 i = 0; i < userShares.length; i++) {
+            IntentTypes.UserShare calldata share = userShares[i];
+
+            // Calculate user's portion: (totalOutput * numerator) / denominator
+            uint64 userAmount = uint64(
+                (uint256(totalOutput) * uint256(share.shareNumerator)) / uint256(share.shareDenominator)
+            );
+
+            // Create encrypted amount and mint
+            euint64 encAmount = FHE.asEuint64(userAmount);
+            FHE.allowThis(encAmount);
+            FHE.allow(encAmount, address(outputToken));
+
+            outputToken.mint(share.user, encAmount);
+        }
     }
 
     // =============================================================
@@ -571,19 +645,58 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
     // =============================================================
 
     function unlockCallback(bytes calldata data) external override onlyPoolManager returns (bytes memory) {
-        (PoolKey memory key, PoolId poolId, uint128 amount, Currency tokenIn, Currency tokenOut) = abi
-            .decode(data, (PoolKey, PoolId, uint128, Currency, Currency));
+        (bytes32 batchId, PoolKey memory key, PoolId poolId, uint128 amount, Currency tokenIn, Currency tokenOut) = abi
+            .decode(data, (bytes32, PoolKey, PoolId, uint128, Currency, Currency));
 
-        // Execute swap via library
-        uint128 outputAmount = SettlementLib.executeNetSwap(
-            poolManager,
-            key,
-            poolId,
-            amount,
-            tokenIn,
-            tokenOut,
-            poolReserves
-        );
+        // Determine swap direction
+        bool zeroForOne = Currency.unwrap(tokenIn) == Currency.unwrap(key.currency0);
+
+        // Execute swap with exact input
+        SwapParams memory swapParams = SwapParams({
+            zeroForOne: zeroForOne,
+            amountSpecified: -int256(uint256(amount)), // Negative for exact input
+            sqrtPriceLimitX96: zeroForOne ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1
+        });
+
+        BalanceDelta delta = poolManager.swap(key, swapParams, "");
+
+        // Read deltas
+        int128 d0 = delta.amount0();
+        int128 d1 = delta.amount1();
+
+        // Settle what we owe (negative), take what we're owed (positive)
+        if (d0 < 0) {
+            key.currency0.settle(poolManager, address(this), uint128(-d0), false);
+        }
+        if (d1 < 0) {
+            key.currency1.settle(poolManager, address(this), uint128(-d1), false);
+        }
+        if (d0 > 0) {
+            key.currency0.take(poolManager, address(this), uint128(d0), false);
+        }
+        if (d1 > 0) {
+            key.currency1.take(poolManager, address(this), uint128(d1), false);
+        }
+
+        // Calculate output amount
+        uint128 outputAmount;
+        if (Currency.unwrap(tokenOut) == Currency.unwrap(key.currency0)) {
+            require(d0 > 0, "No token0 output");
+            outputAmount = uint128(d0);
+        } else {
+            require(d1 > 0, "No token1 output");
+            outputAmount = uint128(d1);
+        }
+
+        // Update reserves
+        IntentTypes.PoolReserves storage reserves = poolReserves[poolId];
+        if (Currency.unwrap(tokenIn) == Currency.unwrap(key.currency0)) {
+            reserves.currency0Reserve -= amount;
+            reserves.currency1Reserve += outputAmount;
+        } else {
+            reserves.currency1Reserve -= amount;
+            reserves.currency0Reserve += outputAmount;
+        }
 
         // Store output for settlement
         lastSwapOutput = outputAmount;
@@ -619,6 +732,8 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
             );
 
             poolEncryptedTokens[poolId][currency] = existing;
+
+            emit EncryptedTokenCreated(poolId, currency, address(existing), Currency.unwrap(currency));
         }
 
         return existing;
@@ -657,6 +772,8 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
                 totalIntents: 0,
                 finalizedTimestamp: 0
             });
+
+            emit BatchCreated(batchId, poolId);
         }
 
         return batchId;
@@ -671,14 +788,21 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
      * @param newRelayer New relayer address
      */
     function updateRelayer(address newRelayer) external onlyOwner {
-        if (newRelayer == address(0)) revert ERR(11);
+        if (newRelayer == address(0)) revert ERR(11); // Invalid relayer
+
+        address oldRelayer = relayer;
         relayer = newRelayer;
+
+        emit RelayerUpdated(oldRelayer, newRelayer);
     }
 
     // =============================================================
     //                    PYTH ORACLE INTEGRATION
     // =============================================================
 
+    /**
+     * @notice Update Pyth price oracle
+     */
     function _updatePythPrice(bytes calldata pythPriceUpdate) internal {
         if (pythPriceUpdate.length == 0) return;
 
@@ -688,7 +812,8 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
         uint256 fee = pyth.getUpdateFee(priceUpdateData);
         pyth.updatePriceFeeds{value: fee}(priceUpdateData);
 
-        pyth.getPriceNoOlderThan(ETH_USD_PRICE_FEED, 600);
+        PythStructs.Price memory price = pyth.getPriceNoOlderThan(ETH_USD_PRICE_FEED, 600);
+        emit PriceUpdated(ETH_USD_PRICE_FEED, price.price, uint64(price.publishTime));
     }
 
     function setDeltaZeroStrategy(address strategy) external onlyOwner {
@@ -700,7 +825,9 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
      * @param lending Address of SimpleLending contract
      */
     function setSimpleLending(address lending) external onlyOwner {
+        address oldLending = address(simpleLending);
         simpleLending = ISimpleLending(lending);
+        emit SimpleLendingUpdated(oldLending, lending);
     }
 
     /**
@@ -709,11 +836,14 @@ contract PrivacyPoolHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient,
      * @param maxAmount Maximum amount allowed per swap (0 = no limit)
      */
     function setMaxSwapAmount(Currency token, uint256 maxAmount) external onlyOwner {
+        uint256 oldAmount = maxSwapAmount[token];
         maxSwapAmount[token] = maxAmount;
+        emit MaxSwapAmountUpdated(token, oldAmount, maxAmount);
     }
 
     /**
      * @notice Allow contract to receive ETH for Pyth fees
      */
     receive() external payable {}
+
 }

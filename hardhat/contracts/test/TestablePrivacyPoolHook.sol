@@ -4,6 +4,10 @@ pragma solidity ^0.8.27;
 import {PrivacyPoolHook} from "../PrivacyPoolHook.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {BaseHook} from "@uniswap/v4-periphery/src/utils/BaseHook.sol";
+import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
+import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
+import {BeforeSwapDelta} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
 
 /**
  * @title TestablePrivacyPoolHook
@@ -25,5 +29,30 @@ contract TestablePrivacyPoolHook is PrivacyPoolHook {
      */
     function validateHookAddress(BaseHook) internal pure override {
         // Skip validation in test environment
+    }
+
+    /**
+     * @notice Test helper to call beforeSwap
+     */
+    function testBeforeSwap(
+        address sender,
+        PoolKey calldata key,
+        SwapParams calldata params,
+        bytes calldata hookData
+    ) external returns (bytes4, BeforeSwapDelta, uint24) {
+        return _beforeSwap(sender, key, params, hookData);
+    }
+
+    /**
+     * @notice Test helper to call afterSwap
+     */
+    function testAfterSwap(
+        address sender,
+        PoolKey calldata key,
+        SwapParams calldata params,
+        BalanceDelta delta,
+        bytes calldata hookData
+    ) external returns (bytes4, int128) {
+        return _afterSwap(sender, key, params, delta, hookData);
     }
 }

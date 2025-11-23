@@ -12,7 +12,9 @@ import {Ownable2Step, Ownable} from "@openzeppelin/contracts/access/Ownable2Step
 
 interface ISimpleLending {
     function collateralToken() external view returns (IERC20);
+
     function borrow(uint256 collateralAssetPrice, uint256 borrowAssetPrice) external;
+
     function repay(uint256 amount) external payable;
 }
 
@@ -100,9 +102,13 @@ contract DeltaZeroStrategy is IDeltaZeroStrategy, Ownable2Step {
         }
     }
 
-    function _handleBorrowing(PoolId poolId, uint256 imbalance, uint256 price, uint24 lpFee, uint256 collateral)
-        internal
-    {
+    function _handleBorrowing(
+        PoolId poolId,
+        uint256 imbalance,
+        uint256 price,
+        uint24 lpFee,
+        uint256 collateral
+    ) internal {
         uint256 depositAmount = (imbalance * REBALANCE_PERCENTAGE_HIGH) / BPS_DENOMINATOR;
 
         if (depositAmount > lpFee) depositAmount = lpFee;
@@ -116,11 +122,10 @@ contract DeltaZeroStrategy is IDeltaZeroStrategy, Ownable2Step {
         }
     }
 
-    function _getPoolState(PoolKey calldata key, PoolId poolId)
-        internal
-        view
-        returns (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee, uint128 liquidity)
-    {
+    function _getPoolState(
+        PoolKey calldata key,
+        PoolId poolId
+    ) internal view returns (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee, uint128 liquidity) {
         (sqrtPriceX96, tick, protocolFee, lpFee) = StateLibrary.getSlot0(poolManager, poolId);
         liquidity = StateLibrary.getLiquidity(poolManager, poolId);
     }
