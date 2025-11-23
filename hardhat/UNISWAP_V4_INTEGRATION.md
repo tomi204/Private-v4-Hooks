@@ -4,6 +4,20 @@
 
 PrivacyPoolHook is a production-ready Uniswap V4 hook deployed on Sepolia that enables fully private, encrypted swaps through an intent-based matching system. The hook implements beforeSwap and afterSwap callbacks to manage liquidity shuttling between lending protocols and the AMM, while maintaining complete privacy through FHEVM-encrypted amounts and actions.
 
+## Verified On-Chain Transactions
+
+All contracts deployed and operational on Sepolia:
+
+- **Hook deployment**: https://sepolia.etherscan.io/tx/0x8dc16ab6b5d8bc47e196b36852024452a837cc7507cc00d5211be1f7fc43722c
+- **SimpleLending configuration**: https://sepolia.etherscan.io/tx/0x6ad979d375954258a94db6f74229a34844813f7429f3d95bad6a011a33e9e692
+- **Pool initialization**: https://sepolia.etherscan.io/tx/0x02ed73451c703cd28a97ad9ffc4592fc563ff3463622fbab3ad0af5f643ef9ba
+- **Liquidity addition**: https://sepolia.etherscan.io/tx/0x8321ad5c517d48da8999985391a9acdf380a9bb2f0c410db0daf55b67921a323
+- **Direct swap with lending hooks**: https://sepolia.etherscan.io/tx/0xfd91f899f1f77c9c2be9cb815a0a3067d1475f7c03346d81525a44ce32a2a89a
+- **Encrypted deposit**: https://sepolia.etherscan.io/tx/0xe5d4a9188064cee1f9f54fc530f3874348b9c82215a710b2c9351ae2b513e59a
+- **Intent submission**: https://sepolia.etherscan.io/tx/0x266538aacbc8dedf67a9056981595277bd4edd9e5a957da97f5b449254b650ba
+- **Batch finalization**: https://sepolia.etherscan.io/tx/0xa1bbb740e8a59011998759d646f7bff778e77b90c3cd7083805700358e9e32f1
+- **Batch settlement with Pyth**: https://sepolia.etherscan.io/tx/0xbf8fbfa0c32dc49246054f508df8cbd138ad97596699188db67d98b63e38ee88
+
 ## Why Uniswap V4 Hooks
 
 ### Traditional AMM Limitations
@@ -893,14 +907,3 @@ PrivacyPoolHook demonstrates advanced Uniswap V4 integration:
 5. **MEV Resistance**: Encrypted amounts prevent frontrunning
 6. **Capital Efficiency**: Lending integration maximizes yields
 7. **Delta-Neutral**: Optional strategies for LP protection
-
-**Verified On-Chain**:
-- Hook deployment: https://sepolia.etherscan.io/tx/0x8dc16ab6b5d8bc47e196b36852024452a837cc7507cc00d5211be1f7fc43722c
-- SimpleLending configuration: https://sepolia.etherscan.io/tx/0x6ad979d375954258a94db6f74229a34844813f7429f3d95bad6a011a33e9e692
-- Pool initialization: https://sepolia.etherscan.io/tx/0x02ed73451c703cd28a97ad9ffc4592fc563ff3463622fbab3ad0af5f643ef9ba
-- Liquidity addition: https://sepolia.etherscan.io/tx/0x8321ad5c517d48da8999985391a9acdf380a9bb2f0c410db0daf55b67921a323
-- Direct swap with lending hooks: https://sepolia.etherscan.io/tx/0xfd91f899f1f77c9c2be9cb815a0a3067d1475f7c03346d81525a44ce32a2a89a
-- Encrypted deposit: https://sepolia.etherscan.io/tx/0x87d108d2c4af39efb79f448c05b1314bb1164142269ef486fe924a207ff4718f
-- Intent submission: https://sepolia.etherscan.io/tx/0xc11bc3ac43740339c5d542bca5d6e079aab90497da3db44106d2818da89df2b8
-- Batch finalization: https://sepolia.etherscan.io/tx/0xa1bbb740e8a59011998759d646f7bff778e77b90c3cd7083805700358e9e32f1
-- Batch settlement with Pyth: https://sepolia.etherscan.io/tx/0xbf8fbfa0c32dc49246054f508df8cbd138ad97596699188db67d98b63e38ee88

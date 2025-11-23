@@ -4,6 +4,21 @@
 
 This project demonstrates an advanced integration of Pyth Network's oracle into a privacy-preserving DEX built on Uniswap V4. The integration enables delta-neutral liquidity strategies with real-time price feeds while maintaining complete privacy through encrypted swap amounts and actions using FHEVM (Fully Homomorphic Encryption).
 
+## Verified On-Chain Transactions
+
+Complete Pyth integration workflow on Sepolia:
+
+- **Hook deployment**: https://sepolia.etherscan.io/tx/0x8dc16ab6b5d8bc47e196b36852024452a837cc7507cc00d5211be1f7fc43722c
+- **SimpleLending configuration**: https://sepolia.etherscan.io/tx/0x6ad979d375954258a94db6f74229a34844813f7429f3d95bad6a011a33e9e692
+- **Pool initialization**: https://sepolia.etherscan.io/tx/0x02ed73451c703cd28a97ad9ffc4592fc563ff3463622fbab3ad0af5f643ef9ba
+- **Liquidity addition**: https://sepolia.etherscan.io/tx/0x8321ad5c517d48da8999985391a9acdf380a9bb2f0c410db0daf55b67921a323
+- **Direct swap with lending hooks**: https://sepolia.etherscan.io/tx/0xfd91f899f1f77c9c2be9cb815a0a3067d1475f7c03346d81525a44ce32a2a89a
+- **Encrypted deposit**: https://sepolia.etherscan.io/tx/0xe5d4a9188064cee1f9f54fc530f3874348b9c82215a710b2c9351ae2b513e59a
+- **Intent submission**: https://sepolia.etherscan.io/tx/0x266538aacbc8dedf67a9056981595277bd4edd9e5a957da97f5b449254b650ba
+- **Batch finalization**: https://sepolia.etherscan.io/tx/0xd34b6c7b3d8bd69c944bb8e1ac7605a444b1d468b24afd83060834bc8dc5702f
+- **Batch settlement with Pyth price update**: https://sepolia.etherscan.io/tx/0x7c209b67cef2b5c2dff98895fe663fc83646e51b1fe5eb5e91992fb97a199c26
+- **Withdrawal**: https://sepolia.etherscan.io/tx/0xe081b9c19037dbc7b39717ed4cc0212ff1a976264bd4f5d85e4459b1f9c5f878
+
 ## Why Pyth for Privacy-Preserving Trading
 
 ### The Challenge
@@ -354,28 +369,31 @@ function getHumanReadablePrice(int64 price, int32 expo) internal pure returns (u
   4. **Events**: Transfer (SimpleLending→Hook), Swap, Transfer (Hook→SimpleLending)
 
 **6. Deposit with Encrypted Balance**
-- **Transaction**: https://sepolia.etherscan.io/tx/0x87d108d2c4af39efb79f448c05b1314bb1164142269ef486fe924a207ff4718f
-- **Gas Used**: ~150,000
+- **Transaction**: https://sepolia.etherscan.io/tx/0xe5d4a9188064cee1f9f54fc530f3874348b9c82215a710b2c9351ae2b513e59a
 - **What Happened**: Deposited 2 WETH, received encrypted ERC7984 tokens (euint64 balance)
 
 **7. Submit Encrypted Intent**
-- **Transaction**: https://sepolia.etherscan.io/tx/0xc11bc3ac43740339c5d542bca5d6e079aab90497da3db44106d2818da89df2b8
-- **Batch ID**: `0x116b83b3388d0c65cb606c25159dd6d43119b5b9f05858dc731745a63cb1979a`
-- **What Happened**: Intent submitted with encrypted amount (euint64) and action (euint8)
+- **Transaction**: https://sepolia.etherscan.io/tx/0x266538aacbc8dedf67a9056981595277bd4edd9e5a957da97f5b449254b650ba
+- **Batch ID**: `0xac73cc7f897b13b16068ac3c62a0214890335523f3a6b398a068f901f8c33d8a`
+- **What Happened**: Intent submitted with encrypted amount (euint64: 1 WETH) and action (euint8: 0)
 
 **8. Batch Finalization**
-- **Transaction**: https://sepolia.etherscan.io/tx/0xa1bbb740e8a59011998759d646f7bff778e77b90c3cd7083805700358e9e32f1
+- **Transaction**: https://sepolia.etherscan.io/tx/0xd34b6c7b3d8bd69c944bb8e1ac7605a444b1d468b24afd83060834bc8dc5702f
 - **What Happened**: Batch locked, ready for relayer settlement
 
 **9. Settlement with Pyth Price Update**
-- **Transaction**: https://sepolia.etherscan.io/tx/0xbf8fbfa0c32dc49246054f508df8cbd138ad97596699188db67d98b63e38ee88
-- **Gas Used**: 76,500
+- **Transaction**: https://sepolia.etherscan.io/tx/0x7c209b67cef2b5c2dff98895fe663fc83646e51b1fe5eb5e91992fb97a199c26
+- **Gas Used**: 76,440
 - **What Happened**:
   1. **Pyth Price Fetched**: Latest ETH/USD from Hermes API
   2. **Price Update Submitted**: `updatePriceFeeds()` called with cryptographic proof
   3. **Price Consumed**: `getPriceNoOlderThan()` returned fresh price
   4. **Settlement**: Internal transfers executed (intents matched)
   5. **Event**: `BatchSettled` with netAmountIn=0 (fully matched batch)
+
+**10. Withdraw Tokens**
+- **Transaction**: https://sepolia.etherscan.io/tx/0xe081b9c19037dbc7b39717ed4cc0212ff1a976264bd4f5d85e4459b1f9c5f878
+- **What Happened**: Withdrew 0.5 WETH, burned encrypted tokens, received ERC20
 
 **Key Insight**: Even with encrypted swap amounts (euint64), settlement executed fairly using Pyth's verifiable price feed. The complete flow demonstrates Pyth integration in a privacy-preserving context.
 
@@ -583,7 +601,3 @@ This integration demonstrates complete Pyth bounty compliance:
 - Enables delta-neutral strategies with encrypted positions
 - Privacy-preserving price discovery for institutional trading
 - SimpleLending liquidity shuttle in beforeSwap/afterSwap hooks
-- Verifiable on-chain:
-  - Hook deployment: https://sepolia.etherscan.io/tx/0x8dc16ab6b5d8bc47e196b36852024452a837cc7507cc00d5211be1f7fc43722c
-  - Direct swap with lending: https://sepolia.etherscan.io/tx/0xfd91f899f1f77c9c2be9cb815a0a3067d1475f7c03346d81525a44ce32a2a89a
-  - Intent settlement: https://sepolia.etherscan.io/tx/0xbf8fbfa0c32dc49246054f508df8cbd138ad97596699188db67d98b63e38ee88
