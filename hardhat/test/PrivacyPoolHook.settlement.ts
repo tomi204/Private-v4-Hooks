@@ -8,13 +8,13 @@ import { mineBlock, type PoolKey } from "./helpers/privacypool.helpers";
 async function getEncryptedTokenAddress(
   hook: TestablePrivacyPoolHook,
   poolKey: PoolKey,
-  currency: string
+  currency: string,
 ): Promise<string> {
   const poolId = ethers.keccak256(
     ethers.AbiCoder.defaultAbiCoder().encode(
       ["address", "address", "uint24", "int24", "address"],
-      [poolKey.currency0, poolKey.currency1, poolKey.fee, poolKey.tickSpacing, poolKey.hooks]
-    )
+      [poolKey.currency0, poolKey.currency1, poolKey.fee, poolKey.tickSpacing, poolKey.hooks],
+    ),
   );
   return await hook.poolEncryptedTokens(poolId, currency);
 }
@@ -88,7 +88,7 @@ describe("PrivacyPoolHook: Complete Settlement Flow", function () {
     hook = await TestablePrivacyPoolHookFactory.deploy(
       await poolManager.getAddress(),
       relayer.address,
-      await mockPyth.getAddress()
+      await mockPyth.getAddress(),
     );
     await hook.waitForDeployment();
 
@@ -248,7 +248,7 @@ describe("PrivacyPoolHook: Complete Settlement Flow", function () {
           poolKey.currency1,
           await encryptedToken1.getAddress(),
           [],
-          "0x"
+          "0x",
         );
 
       await settleTx.wait();
@@ -413,7 +413,16 @@ describe("PrivacyPoolHook: Complete Settlement Flow", function () {
       // Settle
       await hook
         .connect(relayer)
-        .settleBatch(batchId, [], 0, poolKey.currency0, poolKey.currency1, await encryptedToken0.getAddress(), [], "0x");
+        .settleBatch(
+          batchId,
+          [],
+          0,
+          poolKey.currency0,
+          poolKey.currency1,
+          await encryptedToken0.getAddress(),
+          [],
+          "0x",
+        );
 
       await mineBlock();
 
