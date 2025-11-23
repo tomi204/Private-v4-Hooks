@@ -12,7 +12,7 @@ task("execute-direct-swap", "Execute a direct swap on Uniswap V4 to trigger hook
 
     // Real deployed addresses on Sepolia
     const poolManagerAddress = "0xE03A1074c86CFeDd5C142C4F04F1a1536e203543";
-    const hookAddress = "0x25E02663637E83E22F8bBFd556634d42227400C0";
+    const hookAddress = "0x80B884a77Cb6167B884d3419019Df790E65440C0";
 
     const usdcDeploy = await deployments.get("MockERC20_USDC");
     const wethDeploy = await deployments.get("MockERC20_WETH");

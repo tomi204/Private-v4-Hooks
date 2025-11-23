@@ -11,7 +11,7 @@ task("submit-intent", "Submit encrypted swap intent")
     console.log("\n=== Submitting Encrypted Intent ===\n");
 
     // Real deployed addresses on Sepolia
-    const hookAddress = "0x25E02663637E83E22F8bBFd556634d42227400C0";
+    const hookAddress = "0x80B884a77Cb6167B884d3419019Df790E65440C0";
     const usdcDeploy = await deployments.get("MockERC20_USDC");
     const wethDeploy = await deployments.get("MockERC20_WETH");
 

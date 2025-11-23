@@ -14,7 +14,7 @@ contract ExecuteSwap is Script {
     using CurrencyLibrary for Currency;
 
     IPoolManager constant poolManager = IPoolManager(0xE03A1074c86CFeDd5C142C4F04F1a1536e203543);
-    address constant HOOK = 0x25E02663637E83E22F8bBFd556634d42227400C0;
+    address constant HOOK = 0x80B884a77Cb6167B884d3419019Df790E65440C0;
     address constant WETH = 0x0003897f666B36bf31Aa48BEEA2A57B16e60448b;
     address constant USDC = 0xC9D872b821A6552a37F6944F66Fc3E3BA55916F0;
 

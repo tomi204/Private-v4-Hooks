@@ -9,7 +9,7 @@ interface IPrivacyPoolHook {
 }
 
 contract SetSimpleLending is Script {
-    address constant HOOK = 0x25E02663637E83E22F8bBFd556634d42227400C0;
+    address constant HOOK = 0x80B884a77Cb6167B884d3419019Df790E65440C0;
     address constant SIMPLE_LENDING = 0x3b64D86362ec9a8Cae77C661ffc95F0bbd440aa2;
 
     function run() external {

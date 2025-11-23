@@ -35,12 +35,13 @@ Uniswap V4 hooks provide lifecycle callbacks that enable:
 
 | Contract | Address | Purpose |
 |----------|---------|---------|
-| PrivacyPoolHook | `0x25E02663637E83E22F8bBFd556634d42227400C0` | Main hook with beforeSwap/afterSwap |
+| PrivacyPoolHook | `0x80B884a77Cb6167B884d3419019Df790E65440C0` | Main hook with beforeSwap/afterSwap |
 | SettlementLib | `0x75E19a6273beA6888c85B2BF43D57Ab89E7FCb6E` | External library for settlement logic |
 | SimpleLending | `0x3b64D86362ec9a8Cae77C661ffc95F0bbd440aa2` | Lending protocol for idle liquidity |
 | PoolManager | `0xE03A1074c86CFeDd5C142C4F04F1a1536e203543` | Uniswap V4 core contract |
 | WETH (Mock) | `0x0003897f666B36bf31Aa48BEEA2A57B16e60448b` | Test token (18 decimals) |
-| USDC (Mock) | `0xC9D872b821A6552a37F6944F66Fc3E3BA55916F0` | Test token (6 decimals) |
+| USDC (Mock) | `0xC9D872b821A6552a37F6944F66Fc3E3BA55916F0` | Test token (18 decimals for testing) |
+| Pyth Oracle | `0xDd24F84d36BF92C65F92307595335bdFab5Bbd21` | Price oracle for delta-neutral strategies |
 
 **Hook Flags**: `0xC0` (beforeSwap + afterSwap enabled)
 
@@ -124,7 +125,9 @@ if (address(simpleLending) != address(0)) {
 - No permanent liquidity locked in hook
 - Supports both exact input and exact output swaps
 
-**Example Transaction**: https://sepolia.etherscan.io/tx/0x8db3d097ccb716c7a52a883faa4addb2156ad75ebb44879e96898c5f1733ce94
+**Example Transaction**: https://sepolia.etherscan.io/tx/0xfd91f899f1f77c9c2be9cb815a0a3067d1475f7c03346d81525a44ce32a2a89a
+- **Event Sequence**: SimpleLending withdrawal → Swap execution → SimpleLending redeposit
+- **Gas**: 211,774 (full lifecycle with lending integration)
 
 ### afterSwap: Redeposit and Rebalance
 
@@ -221,7 +224,7 @@ encToken.mint(msg.sender, encryptedAmount);
 
 **Result**: User receives encrypted tokens where balance is a euint64 ciphertext, completely hidden from public view.
 
-**Example Transaction**: https://sepolia.etherscan.io/tx/0xaec444ed12630e83aca82651aa479787a26b0bfca753b128c56f2b5fca7ce66d
+**Example Transaction**: https://sepolia.etherscan.io/tx/0x87d108d2c4af39efb79f448c05b1314bb1164142269ef486fe924a207ff4718f
 
 ### Submit Intent: Encrypted Amount and Action
 
@@ -282,7 +285,7 @@ struct Intent {
 
 **Privacy Guarantee**: Neither the amount nor the direction is visible to anyone, including the contract itself. Only authorized parties can perform homomorphic operations on the ciphertexts.
 
-**Example Transaction**: https://sepolia.etherscan.io/tx/0xb1d8052a56fadaabe44c588079cb30448c0622af67e18577a21e5fee8a8ac17a
+**Example Transaction**: https://sepolia.etherscan.io/tx/0xc11bc3ac43740339c5d542bca5d6e079aab90497da3db44106d2818da89df2b8
 
 ### Batch Finalization
 
@@ -314,7 +317,7 @@ function finalizeBatch() external nonReentrant {
 
 **Result**: Batch is locked, ready for relayer to match and settle.
 
-**Example Transaction**: https://sepolia.etherscan.io/tx/0x9e588158ded180405cc99eb049dba9cc9b1310865e735aad5e58c4dcbc2e73f1
+**Example Transaction**: https://sepolia.etherscan.io/tx/0xa1bbb740e8a59011998759d646f7bff778e77b90c3cd7083805700358e9e32f1
 
 ### Settlement: Matching and Execution
 
@@ -417,7 +420,7 @@ function executeNetSwap(...) external returns (uint128 amountOut) {
 }
 ```
 
-**Example Transaction**: https://sepolia.etherscan.io/tx/0xc8f05dd27657b588e3589fa0e167fc574f690d27087eb507cbea4c2504740ad3
+**Example Transaction**: https://sepolia.etherscan.io/tx/0xbf8fbfa0c32dc49246054f508df8cbd138ad97596699188db67d98b63e38ee88
 
 **Transaction Events**:
 - `BatchSettled`: Batch completed
@@ -462,7 +465,7 @@ IERC20(Currency.unwrap(currency)).safeTransfer(msg.sender, amount);
 
 **Result**: User receives ERC20 tokens back, encrypted balance reduced.
 
-**Example Transaction**: https://sepolia.etherscan.io/tx/0x417ce6a87d55dd90eccd75153d2f1dc432084eba274bbcaba006da8055d224a9
+**Example Transaction**: https://sepolia.etherscan.io/tx/0x417ce6a87d55dd90eccd75153d2f1dc432084eba274bbcaba006da8055d224a9 (from previous deployment)
 
 ## Direct Swaps (Non-Intent Path)
 
@@ -501,17 +504,19 @@ swapRouter.swap(key, params, testSettings, "");
 - beforeSwap: Withdraws liquidity from SimpleLending (if configured)
 - afterSwap: Redeposits idle balances to SimpleLending
 
-**Example Transaction**: https://sepolia.etherscan.io/tx/0x8db3d097ccb716c7a52a883faa4addb2156ad75ebb44879e96898c5f1733ce94
+**Example Transaction**: https://sepolia.etherscan.io/tx/0xfd91f899f1f77c9c2be9cb815a0a3067d1475f7c03346d81525a44ce32a2a89a
 
 **Verification**:
 ```bash
 # Check transaction logs for hook calls
-cast receipt 0x8db3d097ccb716c7a52a883faa4addb2156ad75ebb44879e96898c5f1733ce94 --rpc-url sepolia
+cast receipt 0xfd91f899f1f77c9c2be9cb815a0a3067d1475f7c03346d81525a44ce32a2a89a --rpc-url sepolia
 
 # Look for:
+# - Transfer: SimpleLending → Hook (beforeSwap withdrew liquidity)
 # - Swap event from PoolManager (0xE03A1074...)
-# - Transfer events showing token movements
-# - Gas usage: ~150,000 (includes both hooks)
+# - Transfer: Hook → SimpleLending (afterSwap redeposited)
+# - TokenSupplied event from SimpleLending
+# - Gas usage: 211,774 (includes both hooks + lending integration)
 ```
 
 ## Liquidity Management
@@ -560,7 +565,7 @@ modifyLiquidityRouter.modifyLiquidity(key, params, "");
 - Fee: 0.3% (3000 basis points)
 - Tick Spacing: 60
 - Initial Price: 1:1 (sqrtPriceX96 = 2^96)
-- Hook: `0x25E02663637E83E22F8bBFd556634d42227400C0`
+- Hook: `0x80B884a77Cb6167B884d3419019Df790E65440C0`
 
 **Hook Address Derivation**:
 
@@ -576,7 +581,7 @@ uint160 flags = uint160(Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG);
     constructorArgs
 );
 
-// Resulting address: 0x25E02663637E83E22F8bBFd556634d42227400C0
+// Resulting address: 0x80B884a77Cb6167B884d3419019Df790E65440C0
 // Last 2 bytes: 0xC0 = 11000000 (beforeSwap=1, afterSwap=1)
 ```
 
@@ -873,7 +878,8 @@ npx hardhat withdraw-tokens --currency weth --amount 0.5 --network sepolia
 - Sepolia: https://docs.zama.ai/fhevm/getting_started/sepolia
 
 **Deployed Contracts**:
-- Hook: https://sepolia.etherscan.io/address/0x25E02663637E83E22F8bBFd556634d42227400C0
+- Hook: https://sepolia.etherscan.io/address/0x80B884a77Cb6167B884d3419019Df790E65440C0
+- SimpleLending: https://sepolia.etherscan.io/address/0x3b64D86362ec9a8Cae77C661ffc95F0bbd440aa2
 - PoolManager: https://sepolia.etherscan.io/address/0xE03A1074c86CFeDd5C142C4F04F1a1536e203543
 
 ## Summary
@@ -889,6 +895,12 @@ PrivacyPoolHook demonstrates advanced Uniswap V4 integration:
 7. **Delta-Neutral**: Optional strategies for LP protection
 
 **Verified On-Chain**:
-- Direct swap with hooks: https://sepolia.etherscan.io/tx/0x8db3d097ccb716c7a52a883faa4addb2156ad75ebb44879e96898c5f1733ce94
-- Intent submission: https://sepolia.etherscan.io/tx/0xb1d8052a56fadaabe44c588079cb30448c0622af67e18577a21e5fee8a8ac17a
-- Batch settlement: https://sepolia.etherscan.io/tx/0xc8f05dd27657b588e3589fa0e167fc574f690d27087eb507cbea4c2504740ad3
+- Hook deployment: https://sepolia.etherscan.io/tx/0x8dc16ab6b5d8bc47e196b36852024452a837cc7507cc00d5211be1f7fc43722c
+- SimpleLending configuration: https://sepolia.etherscan.io/tx/0x6ad979d375954258a94db6f74229a34844813f7429f3d95bad6a011a33e9e692
+- Pool initialization: https://sepolia.etherscan.io/tx/0x02ed73451c703cd28a97ad9ffc4592fc563ff3463622fbab3ad0af5f643ef9ba
+- Liquidity addition: https://sepolia.etherscan.io/tx/0x8321ad5c517d48da8999985391a9acdf380a9bb2f0c410db0daf55b67921a323
+- Direct swap with lending hooks: https://sepolia.etherscan.io/tx/0xfd91f899f1f77c9c2be9cb815a0a3067d1475f7c03346d81525a44ce32a2a89a
+- Encrypted deposit: https://sepolia.etherscan.io/tx/0x87d108d2c4af39efb79f448c05b1314bb1164142269ef486fe924a207ff4718f
+- Intent submission: https://sepolia.etherscan.io/tx/0xc11bc3ac43740339c5d542bca5d6e079aab90497da3db44106d2818da89df2b8
+- Batch finalization: https://sepolia.etherscan.io/tx/0xa1bbb740e8a59011998759d646f7bff778e77b90c3cd7083805700358e9e32f1
+- Batch settlement with Pyth: https://sepolia.etherscan.io/tx/0xbf8fbfa0c32dc49246054f508df8cbd138ad97596699188db67d98b63e38ee88

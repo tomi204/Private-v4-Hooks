@@ -9,7 +9,7 @@ task("set-simple-lending", "Configure SimpleLending protocol address in hook")
     console.log("Signer:", signer.address);
 
     // Real deployed addresses on Sepolia
-    const hookAddress = "0x25E02663637E83E22F8bBFd556634d42227400C0";
+    const hookAddress = "0x80B884a77Cb6167B884d3419019Df790E65440C0";
     const simpleLendingAddress = "0x3b64D86362ec9a8Cae77C661ffc95F0bbd440aa2";
 
     const hook = await ethers.getContractAt("PrivacyPoolHook", hookAddress);

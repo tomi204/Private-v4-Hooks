@@ -35,10 +35,13 @@ Traditional AMMs suffer from three critical issues:
 ### Components
 
 **Deployed Contracts (Sepolia)**:
-- PrivacyPoolHook: `0x25E02663637E83E22F8bBFd556634d42227400C0`
+- PrivacyPoolHook: `0x80B884a77Cb6167B884d3419019Df790E65440C0`
 - Pyth Oracle: `0xDd24F84d36BF92C65F92307595335bdFab5Bbd21`
 - SettlementLib: `0x75E19a6273beA6888c85B2BF43D57Ab89E7FCb6E`
 - SimpleLending: `0x3b64D86362ec9a8Cae77C661ffc95F0bbd440aa2`
+- PoolManager: `0xE03A1074c86CFeDd5C142C4F04F1a1536e203543`
+- WETH (Mock): `0x0003897f666B36bf31Aa48BEEA2A57B16e60448b`
+- USDC (Mock): `0xC9D872b821A6552a37F6944F66Fc3E3BA55916F0`
 
 **Off-Chain Infrastructure**:
 - Hermes API: Real-time price feed aggregation
@@ -316,35 +319,65 @@ function getHumanReadablePrice(int64 price, int32 expo) internal pure returns (u
 }
 ```
 
-## Example Transaction Breakdown
+## Example Transactions
 
-### Settlement with Pyth Integration
+### Complete Deployment and Testing Flow
 
-**Transaction**: https://sepolia.etherscan.io/tx/0xc8f05dd27657b588e3589fa0e167fc574f690d27087eb507cbea4c2504740ad3
+**1. Hook Deployment**
+- **Transaction**: https://sepolia.etherscan.io/tx/0x8dc16ab6b5d8bc47e196b36852024452a837cc7507cc00d5211be1f7fc43722c
+- **Hook Address**: `0x80B884a77Cb6167B884d3419019Df790E65440C0`
+- **Gas Used**: 7,420,237
+- **What Happened**: Hook deployed with CREATE2, valid flags (0xC0), relayer configured
 
-**Block**: 9688736
-**Gas Used**: 76,560
-**Status**: Success
+**2. SimpleLending Configuration**
+- **Transaction**: https://sepolia.etherscan.io/tx/0x6ad979d375954258a94db6f74229a34844813f7429f3d95bad6a011a33e9e692
+- **Gas Used**: 66,805
+- **What Happened**: `setSimpleLending()` called, lending protocol address configured in hook
 
-**What Happened**:
+**3. Pool Initialization**
+- **Transaction**: https://sepolia.etherscan.io/tx/0x02ed73451c703cd28a97ad9ffc4592fc563ff3463622fbab3ad0af5f643ef9ba
+- **Gas Used**: 75,643
+- **What Happened**: WETH/USDC pool initialized at 1:1 price (sqrtPriceX96 = 2^96)
 
-1. **Batch Finalized**: Batch `0x7cbc64fe1f1a94a56c094506d75c16db8991768a6097d3ee45bc2fc6f0298278` ready for settlement
+**4. Liquidity Addition**
+- **Transaction**: https://sepolia.etherscan.io/tx/0x8321ad5c517d48da8999985391a9acdf380a9bb2f0c410db0daf55b67921a323
+- **Gas Used**: 1,916,009
+- **What Happened**: Added 1000 ether of each token, tick range -6000 to 6000
 
-2. **Relayer Fetched Pyth Update**: Latest ETH/USD price pulled from Hermes API
+**5. Direct Swap with SimpleLending Integration**
+- **Transaction**: https://sepolia.etherscan.io/tx/0xfd91f899f1f77c9c2be9cb815a0a3067d1475f7c03346d81525a44ce32a2a89a
+- **Gas Used**: 211,774
+- **What Happened**:
+  1. **beforeSwap**: Withdrew 0.1 WETH from SimpleLending
+  2. **Swap**: Executed 0.1 WETH → USDC on Uniswap V4
+  3. **afterSwap**: Redeposited remaining tokens to SimpleLending
+  4. **Events**: Transfer (SimpleLending→Hook), Swap, Transfer (Hook→SimpleLending)
 
-3. **Price Update Submitted**: `updatePriceFeeds()` called with cryptographic proof
+**6. Deposit with Encrypted Balance**
+- **Transaction**: https://sepolia.etherscan.io/tx/0x87d108d2c4af39efb79f448c05b1314bb1164142269ef486fe924a207ff4718f
+- **Gas Used**: ~150,000
+- **What Happened**: Deposited 2 WETH, received encrypted ERC7984 tokens (euint64 balance)
 
-4. **Price Consumed**: `getPriceNoOlderThan()` returned fresh price (< 10 minutes old)
+**7. Submit Encrypted Intent**
+- **Transaction**: https://sepolia.etherscan.io/tx/0xc11bc3ac43740339c5d542bca5d6e079aab90497da3db44106d2818da89df2b8
+- **Batch ID**: `0x116b83b3388d0c65cb606c25159dd6d43119b5b9f05858dc731745a63cb1979a`
+- **What Happened**: Intent submitted with encrypted amount (euint64) and action (euint8)
 
-5. **Event Emitted**:
-```solidity
-emit PythPriceConsumed(245075000000, 1234567890);
-// ETH price: $2450.75 USD at timestamp
-```
+**8. Batch Finalization**
+- **Transaction**: https://sepolia.etherscan.io/tx/0xa1bbb740e8a59011998759d646f7bff778e77b90c3cd7083805700358e9e32f1
+- **What Happened**: Batch locked, ready for relayer settlement
 
-6. **Settlement Completed**: Internal transfers executed, net swap calculated, batch marked settled
+**9. Settlement with Pyth Price Update**
+- **Transaction**: https://sepolia.etherscan.io/tx/0xbf8fbfa0c32dc49246054f508df8cbd138ad97596699188db67d98b63e38ee88
+- **Gas Used**: 76,500
+- **What Happened**:
+  1. **Pyth Price Fetched**: Latest ETH/USD from Hermes API
+  2. **Price Update Submitted**: `updatePriceFeeds()` called with cryptographic proof
+  3. **Price Consumed**: `getPriceNoOlderThan()` returned fresh price
+  4. **Settlement**: Internal transfers executed (intents matched)
+  5. **Event**: `BatchSettled` with netAmountIn=0 (fully matched batch)
 
-**Key Insight**: Even though swap amounts were encrypted (euint64), settlement executed fairly using Pyth's verifiable price feed.
+**Key Insight**: Even with encrypted swap amounts (euint64), settlement executed fairly using Pyth's verifiable price feed. The complete flow demonstrates Pyth integration in a privacy-preserving context.
 
 ## Use Cases
 
@@ -460,7 +493,7 @@ npx hardhat settle-batch --batchid <batch-id> --network sepolia
 # Fetches Pyth price, updates oracle, settles batch
 
 # 7. Verify PythPriceConsumed event
-cast logs --address 0x25E02663637E83E22F8bBFd556634d42227400C0 \
+cast logs --address 0x80B884a77Cb6167B884d3419019Df790E65440C0 \
           --from-block latest \
           --to-block latest \
           | grep PythPriceConsumed
@@ -549,4 +582,8 @@ This integration demonstrates complete Pyth bounty compliance:
 - First integration combining Pyth + FHEVM + Uniswap V4
 - Enables delta-neutral strategies with encrypted positions
 - Privacy-preserving price discovery for institutional trading
-- Verifiable on-chain with transaction: https://sepolia.etherscan.io/tx/0xc8f05dd27657b588e3589fa0e167fc574f690d27087eb507cbea4c2504740ad3
+- SimpleLending liquidity shuttle in beforeSwap/afterSwap hooks
+- Verifiable on-chain:
+  - Hook deployment: https://sepolia.etherscan.io/tx/0x8dc16ab6b5d8bc47e196b36852024452a837cc7507cc00d5211be1f7fc43722c
+  - Direct swap with lending: https://sepolia.etherscan.io/tx/0xfd91f899f1f77c9c2be9cb815a0a3067d1475f7c03346d81525a44ce32a2a89a
+  - Intent settlement: https://sepolia.etherscan.io/tx/0xbf8fbfa0c32dc49246054f508df8cbd138ad97596699188db67d98b63e38ee88

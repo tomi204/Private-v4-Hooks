@@ -10,7 +10,7 @@ task("update-price", "Update ETH/USD price from Pyth oracle")
     console.log("Signer:", signer.address);
 
     // Real deployed hook on Sepolia
-    const hookAddress = "0x25E02663637E83E22F8bBFd556634d42227400C0";
+    const hookAddress = "0x80B884a77Cb6167B884d3419019Df790E65440C0";
     const hook = await ethers.getContractAt("PrivacyPoolHook", hookAddress);
 
     // ETH/USD price feed ID on Pyth

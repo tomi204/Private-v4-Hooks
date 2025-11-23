@@ -14,14 +14,15 @@ PrivacyPoolHook provides:
 
 ## Deployed Addresses (Sepolia)
 
-| Contract | Address |
-|----------|---------|
-| **PrivacyPoolHook** | `0x25E02663637E83E22F8bBFd556634d42227400C0` |
-| **SettlementLib** | `0x75E19a6273beA6888c85B2BF43D57Ab89E7FCb6E` |
-| **PoolManager (Uniswap V4)** | `0xE03A1074c86CFeDd5C142C4F04F1a1536e203543` |
-| **Pyth Oracle** | `0xDd24F84d36BF92C65F92307595335bdFab5Bbd21` |
-| **WETH (Mock)** | `0x0003897f666B36bf31Aa48BEEA2A57B16e60448b` |
-| **USDC (Mock)** | `0xC9D872b821A6552a37F6944F66Fc3E3BA55916F0` |
+| Contract | Address | Deployment TX |
+|----------|---------|---------------|
+| **PrivacyPoolHook** | `0x80B884a77Cb6167B884d3419019Df790E65440C0` | [0x8dc16ab6...](https://sepolia.etherscan.io/tx/0x8dc16ab6b5d8bc47e196b36852024452a837cc7507cc00d5211be1f7fc43722c) |
+| **SettlementLib** | `0x75E19a6273beA6888c85B2BF43D57Ab89E7FCb6E` | - |
+| **SimpleLending** | `0x3b64D86362ec9a8Cae77C661ffc95F0bbd440aa2` | - |
+| **PoolManager (Uniswap V4)** | `0xE03A1074c86CFeDd5C142C4F04F1a1536e203543` | Official deployment |
+| **Pyth Oracle** | `0xDd24F84d36BF92C65F92307595335bdFab5Bbd21` | Official deployment |
+| **WETH (Mock)** | `0x0003897f666B36bf31Aa48BEEA2A57B16e60448b` | Test token |
+| **USDC (Mock)** | `0xC9D872b821A6552a37F6944F66Fc3E3BA55916F0` | Test token |
 
 ## How It Works
 
@@ -102,28 +103,82 @@ npx hardhat settle-batch --batchid <batch-id> --network sepolia
 npx hardhat withdraw-tokens --currency weth --amount 0.2 --network sepolia
 ```
 
-## Testing Results ✅
+## Complete Testing Flow (Sepolia)
 
-All functionality has been tested on Sepolia:
+All functionality has been tested end-to-end on Sepolia testnet:
 
-1. ✅ **Deposit**: Successfully deposited 2 WETH and 2000 USDC
-   - TX: [0xc03c0cd...](https://sepolia.etherscan.io/tx/0xc03c0cd272cd38c0b719c7f97e3849377e3de14d2c99c3e5d69cc38b29a9dd2c)
-   - TX: [0x353a2f4...](https://sepolia.etherscan.io/tx/0x353a2f4ab23c1eb8de7d79769c6a681051e5317cbe056a777082fddf900cbcf6)
+### Deployment & Configuration
 
-2. ✅ **Submit Intent**: Successfully submitted encrypted swap intent
-   - TX: [0xb1d8052...](https://sepolia.etherscan.io/tx/0xb1d8052a56fadaabe44c588079cb30448c0622af67e18577a21e5fee8a8ac17a)
+1. ✅ **Hook Deployment**
+   - TX: [0x8dc16ab6...](https://sepolia.etherscan.io/tx/0x8dc16ab6b5d8bc47e196b36852024452a837cc7507cc00d5211be1f7fc43722c)
+   - Hook: `0x80B884a77Cb6167B884d3419019Df790E65440C0`
+   - Gas: 7,420,237
 
-3. ✅ **Finalize Batch**: Successfully finalized batch for settlement
-   - TX: [0x9e58815...](https://sepolia.etherscan.io/tx/0x9e588158ded180405cc99eb049dba9cc9b1310865e735aad5e58c4dcbc2e73f1)
+2. ✅ **SimpleLending Configuration**
+   - TX: [0x6ad979d3...](https://sepolia.etherscan.io/tx/0x6ad979d375954258a94db6f74229a34844813f7429f3d95bad6a011a33e9e692)
+   - Configured lending protocol for liquidity shuttle
+   - Gas: 66,805
 
-4. ✅ **Settle Batch with Pyth**: Successfully settled with oracle update + hooks execution
-   - TX: [0xc8f05dd...](https://sepolia.etherscan.io/tx/0xc8f05dd27657b588e3589fa0e167fc574f690d27087eb507cbea4c2504740ad3)
-   - ✅ Pyth oracle updated on-chain
-   - ✅ Pyth price consumed (event emitted)
-   - ✅ beforeSwap and afterSwap hooks executed
+3. ✅ **Pool Initialization**
+   - TX: [0x02ed7345...](https://sepolia.etherscan.io/tx/0x02ed73451c703cd28a97ad9ffc4592fc563ff3463622fbab3ad0af5f643ef9ba)
+   - WETH/USDC pool at 1:1 price
+   - Gas: 75,643
 
-5. ✅ **Withdraw**: Successfully withdrawn 0.5 WETH
-   - TX: [0x417ce6a...](https://sepolia.etherscan.io/tx/0x417ce6a87d55dd90eccd75153d2f1dc432084eba274bbcaba006da8055d224a9)
+4. ✅ **Liquidity Addition**
+   - TX: [0x8321ad5c...](https://sepolia.etherscan.io/tx/0x8321ad5c517d48da8999985391a9acdf380a9bb2f0c410db0daf55b67921a323)
+   - Added 1000 ether of each token
+   - Tick range: -6000 to 6000
+   - Gas: 1,916,009
+
+### Direct Swap with SimpleLending Integration
+
+5. ✅ **Direct Swap (beforeSwap + afterSwap)**
+   - TX: [0xfd91f899...](https://sepolia.etherscan.io/tx/0xfd91f899f1f77c9c2be9cb815a0a3067d1475f7c03346d81525a44ce32a2a89a)
+   - **beforeSwap**: Withdrew 0.1 WETH from SimpleLending
+   - **Swap**: Executed 0.1 WETH → USDC on Uniswap V4
+   - **afterSwap**: Redeposited tokens to SimpleLending
+   - Gas: 211,774
+
+### Intent-Based Private Trading Flow
+
+6. ✅ **Deposit Encrypted Tokens**
+   - TX: [0x87d108d2...](https://sepolia.etherscan.io/tx/0x87d108d2c4af39efb79f448c05b1314bb1164142269ef486fe924a207ff4718f)
+   - Deposited 2 WETH, received encrypted ERC7984 tokens
+   - Balance: euint64 (fully encrypted)
+
+7. ✅ **Submit Encrypted Intent**
+   - TX: [0xc11bc3ac...](https://sepolia.etherscan.io/tx/0xc11bc3ac43740339c5d542bca5d6e079aab90497da3db44106d2818da89df2b8)
+   - Encrypted amount: euint64
+   - Encrypted action: euint8
+   - Batch ID: `0x116b83b3...`
+
+8. ✅ **Finalize Batch**
+   - TX: [0xa1bbb740...](https://sepolia.etherscan.io/tx/0xa1bbb740e8a59011998759d646f7bff778e77b90c3cd7083805700358e9e32f1)
+   - Batch locked for settlement
+
+9. ✅ **Settle with Pyth Price Update**
+   - TX: [0xbf8fbfa0...](https://sepolia.etherscan.io/tx/0xbf8fbfa0c32dc49246054f508df8cbd138ad97596699188db67d98b63e38ee88)
+   - Fetched ETH/USD from Pyth Hermes API
+   - Updated Pyth oracle on-chain
+   - Consumed price for settlement
+   - Gas: 76,500
+
+## Detailed Integration Guides
+
+For comprehensive documentation on specific integrations:
+
+- **Pyth Network Integration**: See [PYTH_INTEGRATION.md](./PYTH_INTEGRATION.md)
+  - Complete Pull → Update → Consume workflow
+  - Delta-neutral strategies with SimpleLending
+  - Privacy-preserving price oracle usage
+  - Example transactions with full analysis
+
+- **Uniswap V4 Hook Integration**: See [UNISWAP_V4_INTEGRATION.md](./UNISWAP_V4_INTEGRATION.md)
+  - beforeSwap and afterSwap hook implementations
+  - Liquidity shuttle pattern with SimpleLending
+  - Encrypted intent submission and settlement
+  - Complete user journey with encrypted tokens
+  - MEV protection through batching
 
 ## Architecture
 
@@ -137,15 +192,16 @@ All functionality has been tested on Sepolia:
 
 ### Hook Flags
 
-The hook address `0x25E02663637E83E22F8bBFd556634d42227400C0` has flags `0xC0`:
-- `beforeSwap`: Validate swaps against intents
-- `afterSwap`: Update encrypted balances post-swap
+The hook address `0x80B884a77Cb6167B884d3419019Df790E65440C0` has flags `0xC0`:
+- `beforeSwap`: Liquidity shuttle from SimpleLending
+- `afterSwap`: Redeposit idle tokens to SimpleLending
 
 ### CREATE2 Deployment
 
 The hook was deployed using CREATE2 with HookMiner to ensure valid address flags:
-- Salt: `0x00000000000000000000000000000000000000000000000000000000000048f4`
-- Deployer: `0x026ba0AA63686278C3b3b3b9C43bEdD8421E36Cd`
+- Salt: `0x0000000000000000000000000000000000000000000000000000000000000091`
+- Deployer: `0x4e59b44847b379578588920cA78FbF26c0B4956C` (CREATE2 Factory)
+- Deployment TX: [0x8dc16ab6...](https://sepolia.etherscan.io/tx/0x8dc16ab6b5d8bc47e196b36852024452a837cc7507cc00d5211be1f7fc43722c)
 
 ## Development
 

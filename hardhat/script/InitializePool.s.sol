@@ -12,7 +12,7 @@ contract InitializePool is Script {
     address constant POOL_MANAGER = 0xE03A1074c86CFeDd5C142C4F04F1a1536e203543;
 
     // Our deployed hook
-    address constant HOOK = 0x25E02663637E83E22F8bBFd556634d42227400C0;
+    address constant HOOK = 0x80B884a77Cb6167B884d3419019Df790E65440C0;
 
     // Mock tokens on Sepolia
     address constant WETH = 0x0003897f666B36bf31Aa48BEEA2A57B16e60448b;

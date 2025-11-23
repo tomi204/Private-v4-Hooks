@@ -12,7 +12,7 @@ task("add-liquidity", "Add liquidity to Uniswap V4 pool")
 
     // Real deployed addresses on Sepolia
     const poolManagerAddress = "0xE03A1074c86CFeDd5C142C4F04F1a1536e203543";
-    const hookAddress = "0x25E02663637E83E22F8bBFd556634d42227400C0";
+    const hookAddress = "0x80B884a77Cb6167B884d3419019Df790E65440C0";
     const wethAddress = "0x0003897f666B36bf31Aa48BEEA2A57B16e60448b";
     const usdcAddress = "0xC9D872b821A6552a37F6944F66Fc3E3BA55916F0";
 
